@@ -1,10 +1,33 @@
 import React from 'react';
-import heroImage from "../assets/heroImage.png"
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import heroImage from "../assets/heroImage.png";
 import { ArrowRight, Sparkles, Volume2, Image as ImageIcon } from 'lucide-react';
+import Button from '../ui/Button'; 
 
-const HeroSection = ({ user, onGetStarted }) => {
+const HeroSection = ({ onGetStarted }) => {
+  const navigate = useNavigate();
+  
+  /**
+   * AUTH STATE:
+   * Checking if the user is logged in to change the button behavior.
+   */
+  const { isAuthenticated, user: authUser } = useSelector((state) => state.auth);
+  const { user: profileData } = useSelector((state) => state.user);
+  const activeUser = profileData || authUser;
+
+  const handleAction = () => {
+    if (isAuthenticated) {
+      // If logged in, navigate to lessons page
+      navigate('/lessons');
+    } else {
+      // If guest, open the login/signup modal
+      onGetStarted();
+    }
+  };
+
   return (
-    <section className="grid lg:grid-cols-2 items-center gap-8 lg:gap-12 min-h-screen py-12">
+    <section className="grid lg:grid-cols-2 items-center gap-8 lg:gap-12 min-h-[90vh] py-12">
       
       {/* Left Column: Content */}
       <div className="flex flex-col justify-center space-y-6 text-center lg:text-left order-2 lg:order-1">
@@ -27,23 +50,26 @@ const HeroSection = ({ user, onGetStarted }) => {
           </p>
         </div>
 
-        {!user && (
-          <div className="pt-4">
-            <button 
-              onClick={onGetStarted}
-              className="w-full sm:w-auto bg-teal-500 text-white px-10 py-4 rounded-2xl font-black text-lg hover:bg-teal-600 transition-all shadow-xl shadow-teal-100 active:scale-95 flex items-center justify-center gap-2"
-            >
-              Start Learning Now <ArrowRight size={22} />
-            </button>
-          </div>
-        )}
+        {/* DYNAMIC BUTTON:
+          Using your Button.jsx component.
+          The text and action change based on isAuthenticated state.
+        */}
+        <div className="pt-4 flex justify-center lg:justify-start">
+          <Button 
+            onClick={handleAction}
+            variant="primary"
+            className="sm:w-auto flex items-center justify-center gap-2 px-10"
+          >
+            {isAuthenticated ? 'Continue Lessons' : 'Start Learning Now'} 
+            <ArrowRight size={22} />
+          </Button>
+        </div>
       </div>
 
-      {/* Right Column: Visual with 2 Selected Badges */}
+      {/* Right Column: Visual Design */}
       <div className="relative w-full order-1 lg:order-2 flex items-center justify-center lg:justify-end px-4 md:px-12">
-        
         <div className="relative w-full max-w-md">
-          {/* Main Hero Image with Rounded Corners */}
+          {/* Hero Image */}
           <div className="rounded-3xl overflow-hidden border-8 border-white shadow-2xl">
             <img 
               src={heroImage} 
@@ -52,7 +78,7 @@ const HeroSection = ({ user, onGetStarted }) => {
             />
           </div>
           
-          {/* Badge 1: Picture-based (Top Left) */}
+          {/* Badge 1: Picture-based */}
           <div className="absolute -top-6 -left-6 bg-white p-4 rounded-2xl shadow-xl flex items-center gap-3 border border-teal-50 ring-4 ring-white">
             <div className="bg-teal-500 p-2 rounded-xl text-white">
               <ImageIcon size={24} />
@@ -60,14 +86,13 @@ const HeroSection = ({ user, onGetStarted }) => {
             <span className="font-black text-slate-900 text-sm md:text-base whitespace-nowrap">Picture-based</span>
           </div>
 
-          {/* Badge 2: Listen & Speak (Bottom Left) */}
+          {/* Badge 2: Listen & Speak */}
           <div className="absolute -bottom-6 -right-2 bg-teal-600 p-4 rounded-2xl shadow-xl flex items-center gap-3 border-4 border-white">
             <div className="bg-teal-400 p-2 rounded-xl text-white">
               <Volume2 size={24}/>
             </div>
             <span className="font-bold text-white text-sm md:text-base whitespace-nowrap">Listen & Speak</span>
           </div>
-
         </div>
       </div>
     </section>

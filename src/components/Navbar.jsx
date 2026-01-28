@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Menu, X, LogOut, ChevronDown, User, Flame } from 'lucide-react'; // Added Flame icon
+import { Link, useNavigate } from 'react-router-dom';
+import { Menu, X, LogOut, ChevronDown, User, Flame } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
 import AuthModal from './AuthModal';
@@ -15,24 +15,36 @@ const Navbar = () => {
   const menuButtonRef = useRef(null);
 
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   
   /**
-   * DATA SOURCE:
-   * 'auth' slice handles login status.
-   * 'user' slice handles profile details like streaks.
+   * REDUX STATE SELECTION
+   * We pull 'isAuthenticated' to serve as the master switch for the UI.
+   * 'authUser' provides the name/avatar, and 'profileData' provides streak updates.
    */
-  const { user: authUser } = useSelector((state) => state.auth);
+  const { user: authUser, isAuthenticated } = useSelector((state) => state.auth);
   const { user: profileData } = useSelector((state) => state.user);
 
-  // Use profileData if available (for streaks), otherwise fallback to authUser
+  // Combine sources: profileData is preferred for live streak updates
   const activeUser = profileData || authUser;
 
+  /**
+   * UI SYNC
+   * Automatically close the login modal if the user becomes authenticated.
+   */
+  useEffect(() => {
+    if (isAuthenticated) setShowLogin(false);
+  }, [isAuthenticated]);
+
+  /**
+   * OUTSIDE CLICK HANDLER
+   * Closes dropdowns and mobile menus when clicking elsewhere.
+   */
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
-
       if (
         isOpen && 
         mobileMenuRef.current && 
@@ -47,11 +59,14 @@ const Navbar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  useEffect(() => {
-    if (activeUser) setShowLogin(false);
-  }, [activeUser]);
-
   const userIdentifier = activeUser?.name ? activeUser.name.substring(0, 2).toUpperCase() : '??';
+
+  const handleLogout = () => {
+    dispatch(logout());
+    setShowDropdown(false);
+    setIsOpen(false);
+    navigate('/'); // Redirect to landing page immediately
+  };
 
   return (
     <>
@@ -69,12 +84,12 @@ const Navbar = () => {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-8 text-[#334155] font-semibold">
-              {activeUser && (
+              {/* STREAK & PROTECTED LINKS: Only visible if authenticated */}
+              {isAuthenticated && activeUser && (
                 <>
                   <Link to="/lessons" className="hover:text-[#14B8A6] transition-colors">Lessons</Link>
                   <Link to="/practice" className="hover:text-[#14B8A6] transition-colors">Practice</Link>
                   
-                  {/* STREAK DISPLAY: The Fire Icon */}
                   <div className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 group transition-all">
                     <Flame size={18} className="text-orange-500 fill-orange-500 group-hover:scale-110 transition-transform" />
                     <span className="text-orange-700 font-bold text-sm">
@@ -86,7 +101,8 @@ const Navbar = () => {
               
               <a href="#about" className="hover:text-[#14B8A6] transition-colors cursor-pointer">About</a>
 
-              {activeUser ? (
+              {/* USER ACTION AREA */}
+              {isAuthenticated && activeUser ? (
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setShowDropdown(!showDropdown)}
@@ -110,10 +126,7 @@ const Navbar = () => {
                       </button>
 
                       <button
-                        onClick={() => {
-                          dispatch(logout());
-                          setShowDropdown(false);
-                        }}
+                        onClick={handleLogout}
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors font-bold"
                       >
                         <LogOut size={18} /> Logout
@@ -131,9 +144,9 @@ const Navbar = () => {
               )}
             </div>
 
-            {/* Mobile Menu Icon */}
+            {/* Mobile Menu Controls */}
             <div className="md:hidden flex items-center gap-3">
-              {activeUser && (
+              {isAuthenticated && activeUser && (
                 <div className="flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
                   <Flame size={16} className="text-orange-500 fill-orange-500" />
                   <span className="text-orange-700 font-black text-xs">{activeUser?.streak || 0}</span>
@@ -150,13 +163,13 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation Content */}
+        {/* Mobile Navigation Dropdown */}
         {isOpen && (
           <div 
             ref={mobileMenuRef}
             className="md:hidden bg-white border-t border-gray-100 rounded-b-2xl px-6 py-6 space-y-4 shadow-xl animate-in slide-in-from-top-2 duration-200"
           >
-            {activeUser && (
+            {isAuthenticated && activeUser && (
               <>
                 <div className="pb-4 mb-2 border-b border-gray-50 flex justify-between items-center">
                   <div>
@@ -174,7 +187,7 @@ const Navbar = () => {
             <a href="#about" onClick={() => setIsOpen(false)} className="block text-lg font-semibold text-slate-700 hover:text-[#14B8A6]">About</a>
 
             <div className="pt-4 border-t border-gray-100">
-              {!activeUser ? (
+              {!isAuthenticated ? (
                 <button
                   onClick={() => { setShowLogin(true); setIsOpen(false); }}
                   className="w-full bg-[#14B8A6] text-white py-4 rounded-xl font-bold shadow-lg shadow-teal-100"
@@ -183,7 +196,7 @@ const Navbar = () => {
                 </button>
               ) : (
                 <button
-                  onClick={() => { dispatch(logout()); setIsOpen(false); }}
+                  onClick={handleLogout}
                   className="w-full flex items-center justify-center gap-2 text-red-500 font-bold py-3"
                 >
                   <LogOut size={20} /> Logout

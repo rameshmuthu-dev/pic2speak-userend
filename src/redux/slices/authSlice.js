@@ -3,8 +3,8 @@ import API from '../../api/api';
 import { toast } from 'react-toastify';
 
 /**
- * Initial retrieval of authentication data from local storage.
- * This ensures the user remains logged in after a page refresh.
+ * INITIAL STATE
+ * Loads data from localStorage to persist the session after a browser refresh.
  */
 const user = JSON.parse(localStorage.getItem('user'));
 const token = localStorage.getItem('token');
@@ -13,19 +13,21 @@ const initialState = {
     user: user || null,
     token: token || null,
     /**
-     * CRITICAL FIX: We initialize isLoading as true if a token exists but the 
-     * user object hasn't been verified/loaded yet. This stops the ProtectedRoute 
-     * from triggering a redirect to the home page during the initial boot.
+     * isAuthenticated is the master toggle for your UI.
+     * If this is false, the Avatar and Streak in the Navbar should hide.
      */
+    isAuthenticated: !!token, 
     isLoading: !!token && !user, 
     isError: false,
     message: '',
 };
 
 /**
- * Thunk to handle Google Authentication.
- * Communicates with the backend and persists user data to localStorage.
+ * ASYNC THUNKS
+ * Handles backend communication for login and OTP verification.
  */
+
+// Google Authentication
 export const googleLogin = createAsyncThunk(
     'auth/googleLogin',
     async (googleToken, thunkAPI) => {
@@ -35,36 +37,15 @@ export const googleLogin = createAsyncThunk(
                 localStorage.setItem('user', JSON.stringify(response.data.user));
                 localStorage.setItem('token', response.data.token);
                 return response.data;
-            } else {
-                return thunkAPI.rejectWithValue(response.data.message);
             }
+            return thunkAPI.rejectWithValue(response.data.message);
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            return thunkAPI.rejectWithValue(message);
+            return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
         }
     }
 );
 
-/**
- * Thunk to request a one-time password (OTP) via email.
- */
-export const requestOtp = createAsyncThunk(
-    'auth/requestOtp',
-    async (emailData, thunkAPI) => {
-        try {
-            const response = await API.post('/auth/request-otp', emailData);
-            return response.data;
-        } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            return thunkAPI.rejectWithValue(message);
-        }
-    }
-);
-
-/**
- * Thunk to verify the OTP provided by the user.
- * Persists session data upon successful verification.
- */
+// OTP Verification
 export const verifyOtp = createAsyncThunk(
     'auth/verifyOtp',
     async (otpData, thunkAPI) => {
@@ -74,81 +55,67 @@ export const verifyOtp = createAsyncThunk(
                 localStorage.setItem('user', JSON.stringify(response.data.user));
                 localStorage.setItem('token', response.data.token);
                 return response.data;
-            } else {
-                return thunkAPI.rejectWithValue(response.data.message);
             }
+            return thunkAPI.rejectWithValue(response.data.message);
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            return thunkAPI.rejectWithValue(message);
+            return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
         }
     }
 );
 
 /**
- * Thunk to handle user logout.
- * Clears all authentication data from the browser's local storage.
+ * AUTH SLICE
  */
-export const logout = createAsyncThunk('auth/logout', async () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-});
-
 const authSlice = createSlice({
     name: 'auth',
     initialState,
     reducers: {
         /**
-         * Resets the error and loading states to default.
+         * RESET STATE
+         * Clears temporary error and loading flags.
          */
         reset: (state) => {
             state.isLoading = false;
             state.isError = false;
             state.message = '';
+        },
+        /**
+         * INSTANT LOGOUT REDUCER
+         * This synchronous reducer clears the state and storage simultaneously.
+         * Because it's not a Thunk, it forces the UI to re-render instantly.
+         */
+        logout: (state) => {
+            // Clear persistent storage
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+
+            // Reset Redux state instantly
+            state.user = null;
+            state.token = null;
+            state.isAuthenticated = false; // This removes the Avatar/Streak from UI
+            state.isLoading = false;
+            state.isError = false;
+            state.message = '';
+            
+            toast.success('Logged out successfully!');
         }
     },
     extraReducers: (builder) => {
         builder
-            // Google Login lifecycle handlers
-            .addCase(googleLogin.pending, (state) => { 
-                state.isLoading = true; 
-            })
+            // Handle Successful Login states
             .addCase(googleLogin.fulfilled, (state, action) => {
                 state.isLoading = false;
+                state.isAuthenticated = true; // Signals UI to show User Avatar
                 state.user = action.payload.user;
                 state.token = action.payload.token;
-                toast.success(`Welcome ${action.payload.user.name || 'User'}!`);
-            })
-            .addCase(googleLogin.rejected, (state, action) => {
-                state.isLoading = false;
-                state.isError = true;
-                state.message = action.payload;
-                toast.error(action.payload || 'Google Login Failed');
-            })
-            
-            // OTP lifecycle handlers
-            .addCase(requestOtp.fulfilled, (state) => { 
-                state.isLoading = false; 
-                toast.success('OTP sent successfully!');
             })
             .addCase(verifyOtp.fulfilled, (state, action) => {
                 state.isLoading = false;
+                state.isAuthenticated = true;
                 state.user = action.payload.user;
                 state.token = action.payload.token;
-                toast.success('Login successful!');
             })
-            
-            // Logout lifecycle handler
-            .addCase(logout.fulfilled, (state) => {
-                state.user = null;
-                state.token = null;
-                state.isLoading = false;
-                toast.success('Logged out successfully!');
-            })
-            
-            /** * CROSS-SLICE SYNC:
-             * This listens for a successful lesson completion from the practice slice.
-             * It ensures the user's streak in the Navbar is updated immediately without a refresh.
-             */
+            // Sync user streak updates from external actions (like lesson completion)
             .addCase('user/completeLesson/fulfilled', (state, action) => {
                 if (state.user) {
                     state.user.streak = action.payload.streak; 
@@ -157,5 +124,5 @@ const authSlice = createSlice({
     }
 });
 
-export const { reset } = authSlice.actions;
+export const { reset, logout } = authSlice.actions; // Exporting synchronous logout
 export default authSlice.reducer;
