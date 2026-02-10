@@ -5,12 +5,11 @@ import { fetchLessonById } from '../redux/slices/courseSlice';
 import { fetchSentencesByLesson } from '../redux/slices/sentenceSlice'; 
 import { completeLessonAction } from '../redux/slices/userSlice'; 
 import { Volume2, ChevronLeft, ChevronRight, ArrowLeft, Loader2, Play, Pause } from 'lucide-react';
-/* Updated path for LessonSuccess based on your previous messages */
 import LessonSuccess from './LessonSuccess'; 
 import FeedbackSection from '../pages/FeedbackSection'; 
 
 const LessonPlayer = () => {
-  const { id } = useParams(); // This 'id' is our lessonId/partId
+  const { id } = useParams(); 
   const navigate = useNavigate();
   const dispatch = useDispatch();
   
@@ -53,7 +52,6 @@ const LessonPlayer = () => {
         const audio = new Audio(url);
         audioRef.current = audio;
         audio.play().catch(err => {
-          /* FIX: Catching autoplay block errors to prevent crash */
           console.error("Audio error:", err);
           resolve();
         });
@@ -69,9 +67,11 @@ const LessonPlayer = () => {
 
   /**
    * Core Loop: Handles sentence progression and auto-completion.
+   * UPDATED: Added !loading check to ensure audio waits for the loader to finish.
    */
   useEffect(() => {
-    if (sentences.length > 0 && sentences[currentIndex] && !isFinished) {
+    // Only proceed if loading is false and sentences are available
+    if (!loading && sentences.length > 0 && sentences[currentIndex] && !isFinished) {
       const sentence = sentences[currentIndex];
       setPracticedSentences(prev => new Set(prev).add(sentence._id));
 
@@ -97,7 +97,8 @@ const LessonPlayer = () => {
         audioRef.current.onended = null;
       }
     };
-  }, [currentIndex, sentences.length]);
+    // Added loading to the dependency array to trigger when fetch finishes
+  }, [currentIndex, sentences.length, loading, isFinished, isAutoplay]);
 
   /**
    * Logic to handle Autoplay toggling.
@@ -123,9 +124,6 @@ const LessonPlayer = () => {
     }
   };
 
-  /**
-   * Logic to mark lesson as complete in DB before showing success modal.
-   */
   const finishLesson = async () => {
     const result = await dispatch(completeLessonAction({
       lessonId: id,
@@ -168,9 +166,6 @@ const LessonPlayer = () => {
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 font-sans border-t-4 border-teal-500 relative">
       
-      {/* CRITICAL FIX: Passing lessonId prop below.
-          This ensures the practiceSlice can sync these sentences to the gallery.
-      */}
       {isFinished && (
         <LessonSuccess 
           lessonId={id} 
