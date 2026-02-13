@@ -1,22 +1,24 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, ArrowRight, RotateCcw, Layout, ListChecks, X } from 'lucide-react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { saveLessonProgress } from '../redux/slices/practiceSlice';
 import Button from '../ui/Button';
 
-const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, lessonTitle, totalSentences, lessonId }) => {
+const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences, lessonId }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
+  // Accessing the lesson data directly from courseSlice
+  const { currentLesson } = useSelector((state) => state.course);
 
   useEffect(() => {
     const syncData = async () => {
       if (lessonId) {
         try {
-          // Saving progress in the background
+          // Sync lesson completion progress to the backend
           await dispatch(saveLessonProgress(lessonId)).unwrap();
         } catch (error) {
-          // Only errors will be shown for debugging
           console.error("❌ Sync Error:", error);
         }
       }
@@ -24,15 +26,26 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, lessonTitle, to
     syncData();
   }, [lessonId, dispatch]);
 
+  /**
+   * Helper function to safely extract the Topic Name.
+   * Replicated from your LessonCard component for consistency.
+   */
+  const getTopicName = () => {
+    if (!currentLesson?.topic) return "General Topic";
+    
+    if (typeof currentLesson.topic === 'object' && currentLesson.topic !== null) {
+      return currentLesson.topic.name || "General Topic";
+    }
+    return currentLesson.topic || "General Topic";
+  };
+
   return (
-    /* Standard Tailwind 'z-50' used instead of 'z-[60]' */
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4  bg-slate-900/60 backdrop:blur-sm">
-      
-      {/* Standard Tailwind 'max-w-xs' (320px) or 'max-w-sm' (384px) used instead of 'max-w-[340px]' */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div 
         className="relative bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-in fade-in zoom-in duration-300"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Close Button */}
         <button 
           onClick={onClose} 
           className="absolute top-5 right-5 p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
@@ -41,6 +54,7 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, lessonTitle, to
         </button>
 
         <div className="p-8 text-center">
+          {/* Success Icon */}
           <div className="mb-6 inline-flex bg-teal-50 p-5 rounded-full">
             <CheckCircle size={48} className="text-teal-500" />
           </div>
@@ -48,10 +62,17 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, lessonTitle, to
           <h2 className="text-2xl font-black text-slate-900 leading-tight">
             Lesson Finished!
           </h2>
+
+          {/* DYNAMIC TEXT FIX: 
+            Matches the LessonCard format: "TOPIC NAME • PART #"
+          */}
           <p className="text-slate-500 text-sm mt-2 font-medium">
-            Great job on <span className="text-teal-600 font-bold">"{lessonTitle}"</span>
+            Great job on <span className="text-teal-600 font-bold uppercase">
+              "{getTopicName()} • PART {currentLesson?.partNumber || 1}"
+            </span>
           </p>
 
+          {/* Stats Grid */}
           <div className="grid grid-cols-2 gap-4 my-8">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
               <Layout size={20} className="text-teal-500 mb-1 mx-auto" />
@@ -65,6 +86,7 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, lessonTitle, to
             </div>
           </div>
 
+          {/* Action Buttons */}
           <div className="space-y-4">
             <Button 
               onClick={onNextLesson} 
