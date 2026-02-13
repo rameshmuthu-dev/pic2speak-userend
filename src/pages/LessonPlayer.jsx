@@ -21,13 +21,11 @@ const LessonPlayer = () => {
   const [isFinished, setIsFinished] = useState(false);
   const [practicedSentences, setPracticedSentences] = useState(new Set());
   const [isAutoplay, setIsAutoplay] = useState(false);
-  
+  const [isImageReady, setIsImageReady] = useState(false);
+
   const audioRef = useRef(null);
   const timerRef = useRef(null);
 
-  /**
-   * Effect: Resets lesson state whenever the URL 'id' changes.
-   */
   useEffect(() => {
     if (id) {
       dispatch(fetchLessonById(id));
@@ -39,9 +37,10 @@ const LessonPlayer = () => {
     }
   }, [id, dispatch]);
 
-  /**
-   * Helper: Plays audio using a Promise to synchronize with transitions.
-   */
+  useEffect(() => {
+    setIsImageReady(false);
+  }, [currentIndex]);
+
   const playAudio = (url) => {
     return new Promise((resolve) => {
       if (url) {
@@ -52,7 +51,7 @@ const LessonPlayer = () => {
         const audio = new Audio(url);
         audioRef.current = audio;
         audio.play().catch(err => {
-          console.error("Audio error:", err);
+          console.error(err);
           resolve();
         });
         audio.onended = () => {
@@ -65,13 +64,8 @@ const LessonPlayer = () => {
     });
   };
 
-  /**
-   * Core Loop: Handles sentence progression and auto-completion.
-   * UPDATED: Added !loading check to ensure audio waits for the loader to finish.
-   */
   useEffect(() => {
-    // Only proceed if loading is false and sentences are available
-    if (!loading && sentences.length > 0 && sentences[currentIndex] && !isFinished) {
+    if (!loading && sentences.length > 0 && sentences[currentIndex] && !isFinished && isImageReady) {
       const sentence = sentences[currentIndex];
       setPracticedSentences(prev => new Set(prev).add(sentence._id));
 
@@ -97,14 +91,10 @@ const LessonPlayer = () => {
         audioRef.current.onended = null;
       }
     };
-    // Added loading to the dependency array to trigger when fetch finishes
-  }, [currentIndex, sentences.length, loading, isFinished, isAutoplay]);
+  }, [currentIndex, sentences.length, loading, isFinished, isAutoplay, isImageReady]);
 
-  /**
-   * Logic to handle Autoplay toggling.
-   */
   useEffect(() => {
-    if (isAutoplay && audioRef.current === null && !isFinished) {
+    if (isAutoplay && audioRef.current === null && !isFinished && isImageReady) {
        if (currentIndex < sentences.length - 1) {
           timerRef.current = setTimeout(() => {
             handleNext();
@@ -115,7 +105,7 @@ const LessonPlayer = () => {
         clearTimeout(timerRef.current);
       }
     }
-  }, [isAutoplay]);
+  }, [isAutoplay, isImageReady]);
 
   const handleNext = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -183,7 +173,6 @@ const LessonPlayer = () => {
         />
       )}
 
-      {/* Progress Bar */}
       <div className="w-full bg-slate-200 h-1.5 shrink-0">
         <div className="bg-teal-500 h-full transition-all duration-700 ease-out" style={{ width: `${progress}%` }}></div>
       </div>
@@ -214,8 +203,18 @@ const LessonPlayer = () => {
           {currentSentence ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 items-center grow overflow-hidden">
               <div className="flex justify-center items-center overflow-hidden h-full">
-                <div className="bg-white rounded-3xl shadow-2xl border-4 lg:border-8 border-white overflow-hidden aspect-square max-h-64 sm:max-h-80 lg:max-h-full w-auto">
-                  <img src={currentSentence.image?.url} alt="Context" className="w-full h-full object-cover" />
+                <div className="bg-white rounded-3xl shadow-2xl border-4 lg:border-8 border-white overflow-hidden aspect-square max-h-64 sm:max-h-80 lg:max-h-full w-auto relative">
+                  {!isImageReady && (
+                    <div className="absolute inset-0 bg-slate-100 animate-pulse flex items-center justify-center">
+                       <Loader2 className="animate-spin text-slate-300" size={40} />
+                    </div>
+                  )}
+                  <img 
+                    src={currentSentence.image?.url} 
+                    alt="Context" 
+                    className={`w-full h-full object-cover transition-opacity duration-500 ${isImageReady ? 'opacity-100' : 'opacity-0'}`}
+                    onLoad={() => setIsImageReady(true)} 
+                  />
                 </div>
               </div>
 
@@ -231,7 +230,11 @@ const LessonPlayer = () => {
                   <button disabled={currentIndex === 0} onClick={handlePrevious} className="p-3 lg:p-5 bg-white text-slate-300 rounded-2xl shadow-sm border border-slate-100 hover:text-teal-500 transition-all">
                     <ChevronLeft size={32} />
                   </button>
-                  <button onClick={() => playAudio(currentSentence.audio?.url)} className="w-16 h-16 lg:w-28 lg:h-28 bg-teal-500 rounded-3xl flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all group">
+                  <button 
+                    disabled={!isImageReady}
+                    onClick={() => playAudio(currentSentence.audio?.url)} 
+                    className={`w-16 h-16 lg:w-28 lg:h-28 rounded-3xl flex items-center justify-center shadow-xl transition-all group ${isImageReady ? 'bg-teal-500 hover:scale-110 active:scale-95' : 'bg-slate-300 cursor-not-allowed'}`}
+                  >
                     <Volume2 size={30} className="text-white group-hover:animate-pulse" />
                   </button>
                   

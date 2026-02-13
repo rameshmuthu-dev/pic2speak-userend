@@ -4,6 +4,7 @@ import { Menu, X, LogOut, ChevronDown, User, Flame } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
 import AuthModal from './AuthModal';
+import Loading from '../ui/Loading';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,29 +18,15 @@ const Navbar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   
-  /**
-   * REDUX STATE SELECTION
-   * We pull 'isAuthenticated' to serve as the master switch for the UI.
-   * 'authUser' provides the name/avatar, and 'profileData' provides streak updates.
-   */
-  const { user: authUser, isAuthenticated } = useSelector((state) => state.auth);
+  const { user: authUser, isAuthenticated, loading } = useSelector((state) => state.auth);
   const { user: profileData } = useSelector((state) => state.user);
 
-  // Combine sources: profileData is preferred for live streak updates
   const activeUser = profileData || authUser;
 
-  /**
-   * UI SYNC
-   * Automatically close the login modal if the user becomes authenticated.
-   */
   useEffect(() => {
     if (isAuthenticated) setShowLogin(false);
   }, [isAuthenticated]);
 
-  /**
-   * OUTSIDE CLICK HANDLER
-   * Closes dropdowns and mobile menus when clicking elsewhere.
-   */
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -65,16 +52,26 @@ const Navbar = () => {
     dispatch(logout());
     setShowDropdown(false);
     setIsOpen(false);
-    navigate('/'); // Redirect to landing page immediately
+    navigate('/'); 
   };
 
   return (
     <>
+      {loading && (
+        <div className="fixed inset-0 z-100 bg-white flex flex-col items-center justify-center">
+          <Loading message="Verifying Session..." />
+          <div className="mt-2 text-center">
+            <p className="text-[#14B8A6] font-black text-xl tracking-tighter">
+              Pic2Speak
+            </p>
+          </div>
+        </div>
+      )}
+
       <nav className="bg-white border-b-2 border-[#14B8A6]/10 sticky top-0 z-40 shadow-sm rounded-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
 
-            {/* Logo Section */}
             <Link to="/" className="flex items-center gap-2">
               <div className="bg-[#14B8A6] w-9 h-9 rounded-xl flex items-center justify-center text-white font-black">P2S</div>
               <span className="text-xl font-bold text-[#0F172A]">
@@ -82,9 +79,7 @@ const Navbar = () => {
               </span>
             </Link>
 
-            {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-8 text-[#334155] font-semibold">
-              {/* STREAK & PROTECTED LINKS: Only visible if authenticated */}
               {isAuthenticated && activeUser && (
                 <>
                   <Link to="/lessons" className="hover:text-[#14B8A6] transition-colors">Lessons</Link>
@@ -101,7 +96,6 @@ const Navbar = () => {
               
               <a href="#about" className="hover:text-[#14B8A6] transition-colors cursor-pointer">About</a>
 
-              {/* USER ACTION AREA */}
               {isAuthenticated && activeUser ? (
                 <div className="relative" ref={dropdownRef}>
                   <button
@@ -144,7 +138,6 @@ const Navbar = () => {
               )}
             </div>
 
-            {/* Mobile Menu Controls */}
             <div className="md:hidden flex items-center gap-3">
               {isAuthenticated && activeUser && (
                 <div className="flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
@@ -163,7 +156,6 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation Dropdown */}
         {isOpen && (
           <div 
             ref={mobileMenuRef}
