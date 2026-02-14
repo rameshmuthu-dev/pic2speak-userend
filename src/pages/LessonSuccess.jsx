@@ -1,34 +1,19 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, ArrowRight, RotateCcw, Layout, ListChecks, X } from 'lucide-react';
-import { useDispatch, useSelector } from 'react-redux';
-import { saveLessonProgress } from '../redux/slices/practiceSlice';
+import { CheckCircle, ArrowRight, RotateCcw, Layout, ListChecks, X, Flame } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import Button from '../ui/Button';
 
-const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences, lessonId }) => {
-  const dispatch = useDispatch();
+const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences }) => {
   const navigate = useNavigate();
 
-  // Accessing the lesson data directly from courseSlice
+  // Get current lesson info from courseSlice
   const { currentLesson } = useSelector((state) => state.course);
-
-  useEffect(() => {
-    const syncData = async () => {
-      if (lessonId) {
-        try {
-          // Sync lesson completion progress to the backend
-          await dispatch(saveLessonProgress(lessonId)).unwrap();
-        } catch (error) {
-          console.error("❌ Sync Error:", error);
-        }
-      }
-    };
-    syncData();
-  }, [lessonId, dispatch]);
+  // Get updated streak and user data from userSlice
+  const { user } = useSelector((state) => state.user);
 
   /**
    * Helper function to safely extract the Topic Name.
-   * Replicated from your LessonCard component for consistency.
    */
   const getTopicName = () => {
     if (!currentLesson?.topic) return "General Topic";
@@ -54,18 +39,21 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences,
         </button>
 
         <div className="p-8 text-center">
-          {/* Success Icon */}
-          <div className="mb-6 inline-flex bg-teal-50 p-5 rounded-full">
-            <CheckCircle size={48} className="text-teal-500" />
+          {/* Streak Display - New Visual Added */}
+          <div className="mb-4 inline-flex flex-col items-center">
+            <div className="relative">
+              <div className="absolute inset-0 bg-orange-500 blur-xl opacity-20 animate-pulse"></div>
+              <Flame size={48} className="text-orange-500 relative z-10" fill="currentColor" />
+            </div>
+            <p className="text-orange-600 font-black text-xl mt-1">
+              {user?.streak || 0} Day Streak!
+            </p>
           </div>
 
           <h2 className="text-2xl font-black text-slate-900 leading-tight">
             Lesson Finished!
           </h2>
 
-          {/* DYNAMIC TEXT FIX: 
-            Matches the LessonCard format: "TOPIC NAME • PART #"
-          */}
           <p className="text-slate-500 text-sm mt-2 font-medium">
             Great job on <span className="text-teal-600 font-bold uppercase">
               "{getTopicName()} • PART {currentLesson?.partNumber || 1}"
@@ -73,11 +61,11 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences,
           </p>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 gap-4 my-8">
+          <div className="grid grid-cols-2 gap-4 my-6">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
-              <Layout size={20} className="text-teal-500 mb-1 mx-auto" />
-              <p className="text-xs uppercase font-bold text-slate-400">Lesson</p>
-              <p className="text-sm font-black text-slate-700">Done</p>
+              <CheckCircle size={20} className="text-teal-500 mb-1 mx-auto" />
+              <p className="text-xs uppercase font-bold text-slate-400">Status</p>
+              <p className="text-sm font-black text-slate-700">Mastered</p>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
               <ListChecks size={20} className="text-blue-500 mb-1 mx-auto" />
@@ -91,7 +79,7 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences,
             <Button 
               onClick={onNextLesson} 
               variant="primary" 
-              className="w-full py-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-xl shadow-teal-100"
+              className="w-full py-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-xl shadow-teal-100 transition-transform active:scale-95"
             >
               Go to Next Part
               <ArrowRight size={18} />

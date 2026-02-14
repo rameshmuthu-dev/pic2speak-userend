@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchLessonById } from '../redux/slices/courseSlice';
 import { fetchSentencesByLesson, clearSentences } from '../redux/slices/sentenceSlice'; 
+// Import progress update action
+import { completeLessonAction } from '../redux/slices/userSlice'; 
 import { Volume2, ChevronLeft, ChevronRight, ArrowLeft, Loader2, Play, Pause } from 'lucide-react';
 import LessonSuccess from './LessonSuccess'; 
 import FeedbackSection from '../pages/FeedbackSection'; 
@@ -23,6 +25,7 @@ const LessonPlayer = () => {
   const audioRef = useRef(null);
   const timerRef = useRef(null);
 
+  // 1. Initial Load
   useEffect(() => {
     if (id) {
       dispatch(fetchLessonById(id));
@@ -36,6 +39,16 @@ const LessonPlayer = () => {
       dispatch(clearSentences());
     };
   }, [id, dispatch]);
+
+  // 2. STREAK & PROGRESS SYNC: Runs when isFinished becomes true
+  useEffect(() => {
+    if (isFinished && id) {
+      dispatch(completeLessonAction({ 
+        lessonId: id, 
+        sentencesPracticed: sentences.length 
+      }));
+    }
+  }, [isFinished, id, dispatch, sentences.length]);
 
   useEffect(() => {
     setIsImageReady(false);
@@ -61,10 +74,10 @@ const LessonPlayer = () => {
     });
   };
 
+  // 3. Autoplay & Finish Logic
   useEffect(() => {
     if (!loading && sentences.length > 0 && !isFinished && isImageReady) {
       const sentence = sentences[currentIndex];
-      // Matches your schema: sentence.audio.url
       playAudio(sentence.audio?.url).then(() => {
         if (isAutoplay && currentIndex < sentences.length - 1) {
           timerRef.current = setTimeout(() => handleNext(), 3000);
@@ -127,7 +140,10 @@ const LessonPlayer = () => {
 
       {/* Progress Bar */}
       <div className="w-full bg-slate-200 h-1.5 shrink-0">
-        <div className="bg-teal-500 h-full transition-all duration-700 ease-out" style={{ width: `${progress}%` }}></div>
+        <div 
+          className="bg-teal-500 h-full transition-all duration-700 ease-out" 
+          style={{ width: `${progress}%` }}
+        ></div>
       </div>
 
       <div className="flex flex-col items-center justify-center p-4 lg:p-10 h-[80vh]">
@@ -154,7 +170,6 @@ const LessonPlayer = () => {
 
           {currentSentence ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 items-center grow overflow-hidden">
-              {/* Image Side - Matches schema: currentSentence.image.url */}
               <div className="flex justify-center items-center overflow-hidden h-full">
                 <div className="bg-white rounded-3xl shadow-2xl border-4 lg:border-8 border-white overflow-hidden aspect-square max-h-64 sm:max-h-80 lg:max-h-full w-auto relative">
                   {!isImageReady && (
@@ -171,26 +186,24 @@ const LessonPlayer = () => {
                 </div>
               </div>
 
-              {/* Text Side */}
               <div className="flex flex-col items-center lg:items-start justify-center gap-6 lg:gap-10 text-center lg:text-left">
                 <div className="space-y-2 lg:space-y-6">
                   <span className="px-4 py-1.5 bg-teal-50 text-teal-600 rounded-full text-xs font-black uppercase tracking-widest">Natural Learning</span>
-                  
-                  {/* CRITICAL CHANGE: Matches your schema field 'text' */}
                   <h2 className="text-3xl sm:text-5xl lg:text-7xl font-black text-slate-800 leading-tight">
                     {currentSentence.text}
                   </h2>
                 </div>
 
-                {/* Controls */}
                 <div className="flex items-center gap-6 lg:gap-10">
-                  <button disabled={currentIndex === 0} onClick={handlePrevious} className="p-3 lg:p-5 bg-white text-slate-300 rounded-2xl border border-slate-100 hover:text-teal-500">
+                  <button disabled={currentIndex === 0} onClick={handlePrevious} className="p-3 lg:p-5 bg-white text-slate-300 rounded-2xl border border-slate-100 hover:text-teal-500 transition-colors">
                     <ChevronLeft size={32} />
                   </button>
                   <button 
                     disabled={!isImageReady}
                     onClick={() => playAudio(currentSentence.audio?.url)} 
-                    className={`w-16 h-16 lg:w-28 lg:h-28 rounded-3xl flex items-center justify-center shadow-xl transition-all group ${isImageReady ? 'bg-teal-500 hover:scale-110' : 'bg-slate-300 cursor-not-allowed'}`}
+                    className={`w-16 h-16 lg:w-28 lg:h-28 rounded-3xl flex items-center justify-center shadow-xl transition-all group ${
+                      isImageReady ? 'bg-teal-500 hover:scale-105 active:scale-95' : 'bg-slate-300 cursor-not-allowed'
+                    }`}
                   >
                     <Volume2 size={30} className="text-white group-hover:animate-pulse" />
                   </button>

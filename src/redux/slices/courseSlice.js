@@ -1,19 +1,23 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api';
 
+// 1. Fetch Categories (Phases)
+// Note: Backend ippo isUnlocked and needsUpgrade data-vai anuppum
 export const fetchCategories = createAsyncThunk(
   'course/fetchCategories',
   async (level, { rejectWithValue }) => {
     try {
+      // Using /categories?level=Beginner etc.
       const url = level && level !== 'all' ? `/categories?level=${level}` : '/categories';
       const response = await API.get(url);
-      return response.data.categories;
+      return response.data.categories; 
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch categories');
     }
   }
 );
 
+// ... (Topics and Lessons fetches remain same) ...
 export const fetchTopics = createAsyncThunk(
   'course/fetchTopics',
   async (categoryId, { rejectWithValue }) => {
@@ -43,7 +47,6 @@ export const fetchLessonById = createAsyncThunk(
   async (lessonId, { rejectWithValue }) => {
     try {
       const response = await API.get(`/lessons/${lessonId}`);
-      // Using the key from your Postman response
       return response.data.lesson || response.data.updatedLesson; 
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch lesson');
@@ -54,7 +57,7 @@ export const fetchLessonById = createAsyncThunk(
 const courseSlice = createSlice({
   name: 'course',
   initialState: {
-    categories: [],
+    categories: [], // This will now hold isUnlocked status for each phase
     topics: [],
     lessons: [],
     currentLesson: null,
@@ -75,9 +78,6 @@ const courseSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      /**
-       * RULE: All .addCase() calls must come FIRST.
-       */
       .addCase(fetchCategories.fulfilled, (state, action) => {
         state.loading = false;
         state.categories = action.payload;
@@ -94,10 +94,6 @@ const courseSlice = createSlice({
         state.loading = false;
         state.currentLesson = action.payload;
       })
-
-      /**
-       * RULE: All .addMatcher() calls must come AFTER .addCase().
-       */
       .addMatcher(
         (action) => action.type.endsWith('/pending'),
         (state) => { 

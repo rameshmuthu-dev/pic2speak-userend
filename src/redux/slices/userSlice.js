@@ -2,33 +2,35 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api';
 
 /**
- * THUNK: Complete Lesson
- * Updated to accept the data object correctly
- */
-export const completeLessonAction = createAsyncThunk(
-  'user/completeLesson',
-  async (data, { rejectWithValue }) => {
-    try {
-      // data contains { lessonId, sentencesPracticed }
-      const response = await API.post(`/user/complete-lesson/${data.lessonId}`, data);
-      return response.data; // This returns { user, streak, completedLessons, ... }
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to save progress');
-    }
-  }
-);
-
-/**
  * THUNK: Fetch User Profile
+ * This runs when the dashboard loads to sync the latest streak and progress.
  */
 export const fetchUserProfile = createAsyncThunk(
   'user/fetchProfile',
   async (_, { rejectWithValue }) => {
     try {
       const response = await API.get('/user/profile');
-      return response.data;
+      return response.data.user; // Returning the user object from backend
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch profile');
+    }
+  }
+);
+
+/**
+ * THUNK: Complete Lesson
+ * Triggered when the user finishes a lesson. 
+ * Updates the streak and adds the lesson ID to completedLessons in DB.
+ */
+export const completeLessonAction = createAsyncThunk(
+  'user/completeLesson',
+  async (data, { rejectWithValue }) => {
+    try {
+      // data should be { lessonId: "..." }
+      const response = await API.post(`/user/complete-lesson/${data.lessonId}`, data);
+      return response.data; // Expected: { success, user, streak, completedLessons }
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to save progress');
     }
   }
 );
@@ -37,55 +39,59 @@ const userSlice = createSlice({
   name: 'user',
   initialState: {
     user: JSON.parse(localStorage.getItem('user')) || null,
-    completedLessons: [],
+    completedLessons: JSON.parse(localStorage.getItem('user'))?.completedLessons || [],
     loading: false,
     error: null,
   },
   reducers: {
+    // Manually set user data (e.g., after login)
     setUser: (state, action) => {
       state.user = action.payload;
       state.completedLessons = action.payload.completedLessons || [];
+      localStorage.setItem('user', JSON.stringify(action.payload));
     },
+    // Clear state and storage on logout
     logout: (state) => {
       state.user = null;
       state.completedLessons = [];
-      localStorage.removeItem('user'); // Also clear storage on logout
+      state.error = null;
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    },
+    // Clear error messages in UI
+    clearUserError: (state) => {
+      state.error = null;
     }
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Profile success
+      // Handle Profile Fetch Success
       .addCase(fetchUserProfile.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload;
         state.completedLessons = action.payload.completedLessons || [];
+        // Keep local storage in sync with latest DB data
+        localStorage.setItem('user', JSON.stringify(action.payload));
       })
 
-      // Complete Lesson success (Updates Streak & Syncs UI)
+      // Handle Lesson Completion Success
       .addCase(completeLessonAction.fulfilled, (state, action) => {
         state.loading = false;
-        
-        // Use the full user object from server to ensure all stats (streak, mastered count) are in sync
+        // The backend returns the updated user object
         state.user = action.payload.user;
-        state.completedLessons = action.payload.completedLessons;
-
-        // Update local storage so the streak persists after page refresh
+        state.completedLessons = action.payload.user.completedLessons;
+        
+        // Critically important: Update LocalStorage so Phase Unlock persists
         localStorage.setItem('user', JSON.stringify(action.payload.user));
       })
 
-      // --- Matchers ---
-      .addMatcher(
-        (action) => 
-          action.type === 'auth/googleLogin/fulfilled' || 
-          action.type === 'auth/verifyOtp/fulfilled',
-        (state, action) => {
-          state.user = action.payload.user;
-          state.completedLessons = action.payload.user.completedLessons || [];
-        }
-      )
+      // --- Common Matchers for Loading and Error States ---
       .addMatcher(
         (action) => action.type.endsWith('/pending'),
-        (state) => { state.loading = true; state.error = null; }
+        (state) => {
+          state.loading = true;
+          state.error = null;
+        }
       )
       .addMatcher(
         (action) => action.type.endsWith('/rejected'),
@@ -97,5 +103,5 @@ const userSlice = createSlice({
   },
 });
 
-export const { setUser, logout } = userSlice.actions;
+export const { setUser, logout, clearUserError } = userSlice.actions;
 export default userSlice.reducer;
