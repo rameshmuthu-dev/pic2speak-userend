@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, ChevronDown, User, Flame } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
-import { logout } from '../redux/slices/authSlice';
+import { logout as authLogout } from '../redux/slices/authSlice';
+import { logout as userLogout } from '../redux/slices/userSlice';
 import AuthModal from './AuthModal';
 import Loading from '../ui/Loading';
 
@@ -49,7 +50,8 @@ const Navbar = () => {
   const userIdentifier = activeUser?.name ? activeUser.name.substring(0, 2).toUpperCase() : '??';
 
   const handleLogout = () => {
-    dispatch(logout());
+    dispatch(authLogout());
+    dispatch(userLogout());
     setShowDropdown(false);
     setIsOpen(false);
     navigate('/'); 

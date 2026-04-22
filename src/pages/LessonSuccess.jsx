@@ -1,20 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, ArrowRight, RotateCcw, Layout, ListChecks, X, Flame } from 'lucide-react';
+import { CheckCircle, ArrowRight, RotateCcw, ListChecks, X, Flame } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import Button from '../ui/Button';
 
 const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences }) => {
   const navigate = useNavigate();
-
-  // Get current lesson info from courseSlice
   const { currentLesson } = useSelector((state) => state.course);
-  // Get updated streak and user data from userSlice
   const { user } = useSelector((state) => state.user);
 
-  /**
-   * Helper function to safely extract the Topic Name.
-   */
   const getTopicName = () => {
     if (!currentLesson?.topic) return "General Topic";
     
@@ -30,7 +24,6 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
         className="relative bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-in fade-in zoom-in duration-300"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button */}
         <button 
           onClick={onClose} 
           className="absolute top-5 right-5 p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
@@ -39,7 +32,6 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
         </button>
 
         <div className="p-8 text-center">
-          {/* Streak Display - New Visual Added */}
           <div className="mb-4 inline-flex flex-col items-center">
             <div className="relative">
               <div className="absolute inset-0 bg-orange-500 blur-xl opacity-20 animate-pulse"></div>
@@ -60,7 +52,6 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
             </span>
           </p>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-2 gap-4 my-6">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
               <CheckCircle size={20} className="text-teal-500 mb-1 mx-auto" />
@@ -74,7 +65,6 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="space-y-4">
             <Button 
               onClick={onNextLesson} 

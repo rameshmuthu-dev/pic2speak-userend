@@ -18,7 +18,6 @@ const Lessons = () => {
   const { level, categoryId, topicId } = useParams();
   const { categories, topics, lessons, loading, activeLevel } = useSelector((state) => state.course);
 
-  // Determine current navigation view
   const step = !categoryId ? 'categories' : (!topicId ? 'topics' : 'parts');
 
   useEffect(() => {
@@ -39,8 +38,6 @@ const Lessons = () => {
   return (
     <div className="min-h-screen bg-slate-50 pb-20 pt-10 px-6">
       <div className="max-w-7xl mx-auto">
-        
-        {/* Header Section */}
         <div className="bg-white border-b border-slate-100 pb-12 rounded-3xl shadow-sm mb-12">
           <div className="px-10 pt-10">
             <h1 className="text-4xl font-black text-slate-900 mb-6">
@@ -64,7 +61,6 @@ const Lessons = () => {
           </div>
         </div>
 
-        {/* Navigation Control */}
         {step !== 'categories' && (
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-teal-600 font-bold mb-6 hover:translate-x-1 transition-all">
             <ArrowLeft size={20} /> Back
@@ -73,10 +69,7 @@ const Lessons = () => {
 
         {loading && <p className="text-center text-teal-500 font-bold animate-pulse">Loading...</p>}
 
-        {/* Main Content Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          
-          {/* STEP 1: CATEGORIES (Locked based on Phase order) */}
           {step === 'categories' && categories.map((cat) => (
             <div 
               key={cat._id} 
@@ -105,7 +98,6 @@ const Lessons = () => {
                   
                   <h3 className="text-2xl font-black text-slate-800 uppercase mb-2">{cat.name}</h3>
 
-                  {/* Mastery Tracking */}
                   {cat.isUnlocked && cat.progress ? (
                     <div className="mt-auto pt-6 border-t border-slate-50">
                       <div className="flex justify-between items-center mb-2 px-1">
@@ -145,12 +137,7 @@ const Lessons = () => {
             </div>
           ))}
 
-          {/* STEP 2: TOPICS (Unlocked once Category is accessed) */}
-          {step === 'topics' && topics.map((top) => {
-            // FIX: Ensure topics are accessible if the user is inside the category
-            const isTopicOpen = true; 
-
-            return (
+          {step === 'topics' && topics.map((top) => (
               <div 
                 key={top._id} 
                 onClick={() => navigate(`/lessons/${level}/${categoryId}/${top._id}`)} 
@@ -167,10 +154,8 @@ const Lessons = () => {
                     <h3 className="text-2xl font-black text-slate-800 uppercase">{top.name}</h3>
                 </div>
               </div>
-            );
-          })}
+          ))}
 
-          {/* STEP 3: LESSONS */}
           {step === 'parts' && (
             lessons.length > 0 ? (
               lessons.map((lesson) => (
@@ -184,7 +169,6 @@ const Lessons = () => {
           )}
         </div>
 
-        {/* Feedback Section */}
         <div className="mt-20 pt-10 border-t border-slate-200">
           <FeedbackSection />
         </div>
