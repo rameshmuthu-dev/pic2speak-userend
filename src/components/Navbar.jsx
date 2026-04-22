@@ -142,9 +142,14 @@ const Navbar = () => {
 
             <div className="md:hidden flex items-center gap-3">
               {isAuthenticated && activeUser && (
-                <div className="flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
-                  <Flame size={16} className="text-orange-500 fill-orange-500" />
-                  <span className="text-orange-700 font-black text-xs">{activeUser?.streak || 0}</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
+                    <Flame size={16} className="text-orange-500 fill-orange-500" />
+                    <span className="text-orange-700 font-black text-xs">{activeUser?.streak || 0}</span>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-[#14B8A6] flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                    {userIdentifier}
+                  </div>
                 </div>
               )}
               <button 
