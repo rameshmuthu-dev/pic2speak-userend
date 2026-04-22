@@ -12,11 +12,13 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    height: 100%;
+    overflow-x: hidden; 
   }
 
   body {
    
-    @apply bg-slate-50 text-slate-900 min-h-screen;
+    @apply bg-slate-50 text-slate-900 
   }
 }
 html {
