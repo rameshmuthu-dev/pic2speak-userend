@@ -19,7 +19,7 @@ export const useAuth = () => {
           localStorage.setItem('user', JSON.stringify(response.data.user));
           
           // Login aanavudan homepage-kku redirect seiya
-          window.location.href = '/'; 
+          navigate('/'); 
         }
       } catch (error) {
         console.error("Login Error:", error);
