@@ -16,21 +16,28 @@ const PracticePage = () => {
 
   const groupedData = practicedSentences?.reduce((acc, item) => {
     const lessonObj = item.sentence?.lessonId;
-    const partId = lessonObj?._id;
-    if (partId && !acc[partId]) {
+    if (!lessonObj) return acc;
+
+    const partNumber = lessonObj.partNumber || 1;
+    const uniquePartKey = `${lessonObj._id}_part_${partNumber}`;
+
+    if (!acc[uniquePartKey]) {
       const rawTopic = lessonObj?.topic;
       const topicDisplayName = (typeof rawTopic === 'object' && rawTopic !== null) 
         ? rawTopic.name : (lessonObj?.title || "General Topic");
-      acc[partId] = { 
-        id: partId, 
+
+      acc[uniquePartKey] = { 
+        id: lessonObj._id, 
+        uniqueKey: uniquePartKey,
         title: lessonObj?.title || "Mastered Lesson", 
         thumbnail: lessonObj?.thumbnail || null,
         level: lessonObj?.level || 'Beginner',
-        displayLabel: `${topicDisplayName.toUpperCase()} • PART ${lessonObj?.partNumber || 1}`,
+        displayLabel: `${topicDisplayName.toUpperCase()} • PART ${partNumber}`,
         count: 0 
       };
     }
-    if (partId) acc[partId].count += 1;
+    
+    acc[uniquePartKey].count += 1;
     return acc;
   }, {});
 
@@ -46,11 +53,6 @@ const PracticePage = () => {
   return (
     <div className="min-h-screen bg-slate-50 pb-20 pt-4 md:pt-10 px-4 md:px-6">
       <div className="max-w-7xl mx-auto">
-        
-        {/* FIXED RESPONSIVE HEADER: 
-          - Reduced padding on mobile (p-4) to prevent text cutoff
-          - Smaller title and icon on small screens
-        */}
         <header className="bg-white border-b border-slate-100 p-4 md:p-12 rounded-xl md:rounded-3xl shadow-sm mb-6 md:mb-12">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="bg-teal-500 p-2 rounded-xl w-fit">
@@ -73,16 +75,12 @@ const PracticePage = () => {
              <p className="text-slate-400 font-bold text-sm">No mastered lessons yet.</p>
           </div>
         ) : (
-          /* FIXED GRID: 
-            - gap-4 on mobile for better spacing
-          */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
             {practicedParts.map((part) => (
               <div 
-                key={part.id} 
+                key={part.uniqueKey} 
                 onClick={() => navigate(`/practice/lesson/${part.id}`)}
-                className="bg-white rounded-2xl md:rounded-3xl overflow-hidden shadow-sm border border-slate-100 
-                           hover:shadow-md transition-all cursor-pointer group flex flex-col h-full"
+                className="bg-white rounded-2xl md:rounded-3xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-md transition-all cursor-pointer group flex flex-col h-full"
               >
                 <div className="relative aspect-video overflow-hidden bg-slate-100">
                   {part.thumbnail?.url ? (
@@ -123,7 +121,7 @@ const PracticePage = () => {
                       navigate(`/practice/lesson/${part.id}`);
                     }}
                   >
-                  Keep Practicing
+                    Keep Practicing
                     <ChevronRight size={16} />
                   </Button>
                 </div>

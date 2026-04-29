@@ -2,32 +2,34 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api'; 
 import { toast } from 'react-toastify';
 
-/**
- * INITIAL STATE
- * Loads data from localStorage to persist the session after a browser refresh.
- */
 const user = JSON.parse(localStorage.getItem('user'));
 const token = localStorage.getItem('token');
 
 const initialState = {
     user: user || null,
     token: token || null,
-    /**
-     * isAuthenticated is the master toggle for your UI.
-     * If this is false, the Avatar and Streak in the Navbar should hide.
-     */
     isAuthenticated: !!token, 
-    isLoading: !!token && !user, 
+    isLoading: false, 
     isError: false,
     message: '',
 };
 
-/**
- * ASYNC THUNKS
- * Handles backend communication for login and OTP verification.
- */
+export const fetchUserProfile = createAsyncThunk(
+    'auth/fetchUserProfile',
+    async (_, thunkAPI) => {
+        try {
+            const response = await API.get('/user/profile');
+            if (response.data.success) {
+                localStorage.setItem('user', JSON.stringify(response.data.user));
+                return response.data.user;
+            }
+            return thunkAPI.rejectWithValue(response.data.message);
+        } catch (error) {
+            return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
+        }
+    }
+);
 
-// Google Authentication
 export const googleLogin = createAsyncThunk(
     'auth/googleLogin',
     async (googleToken, thunkAPI) => {
@@ -45,7 +47,6 @@ export const googleLogin = createAsyncThunk(
     }
 );
 
-// OTP Verification
 export const verifyOtp = createAsyncThunk(
     'auth/verifyOtp',
     async (otpData, thunkAPI) => {
@@ -63,49 +64,32 @@ export const verifyOtp = createAsyncThunk(
     }
 );
 
-/**
- * AUTH SLICE
- */
 const authSlice = createSlice({
     name: 'auth',
     initialState,
     reducers: {
-        /**
-         * RESET STATE
-         * Clears temporary error and loading flags.
-         */
         reset: (state) => {
             state.isLoading = false;
             state.isError = false;
             state.message = '';
         },
-        /**
-         * INSTANT LOGOUT REDUCER
-         * This synchronous reducer clears the state and storage simultaneously.
-         * Because it's not a Thunk, it forces the UI to re-render instantly.
-         */
         logout: (state) => {
-            // Clear persistent storage
             localStorage.removeItem('user');
             localStorage.removeItem('token');
-
-            // Reset Redux state instantly
             state.user = null;
             state.token = null;
-            state.isAuthenticated = false; // This removes the Avatar/Streak from UI
+            state.isAuthenticated = false;
             state.isLoading = false;
             state.isError = false;
             state.message = '';
-            
             toast.success('Logged out successfully!');
         }
     },
     extraReducers: (builder) => {
         builder
-            // Handle Successful Login states
             .addCase(googleLogin.fulfilled, (state, action) => {
                 state.isLoading = false;
-                state.isAuthenticated = true; // Signals UI to show User Avatar
+                state.isAuthenticated = true;
                 state.user = action.payload.user;
                 state.token = action.payload.token;
             })
@@ -115,14 +99,19 @@ const authSlice = createSlice({
                 state.user = action.payload.user;
                 state.token = action.payload.token;
             })
-            // Sync user streak updates from external actions (like lesson completion)
-            .addCase('user/completeLesson/fulfilled', (state, action) => {
+            .addCase(fetchUserProfile.fulfilled, (state, action) => {
+                state.isLoading = false;
+                state.user = action.payload;
+                state.isAuthenticated = true;
+            })
+            .addCase('course/completeLesson/fulfilled', (state, action) => {
                 if (state.user) {
-                    state.user.streak = action.payload.streak; 
+                    state.user.streak = action.payload.streak;
+                    localStorage.setItem('user', JSON.stringify(state.user));
                 }
             });
     }
 });
 
-export const { reset, logout } = authSlice.actions; // Exporting synchronous logout
+export const { reset, logout } = authSlice.actions;
 export default authSlice.reducer;

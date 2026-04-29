@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, ChevronDown, User, Flame } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
-import { logout as authLogout } from '../redux/slices/authSlice';
+import { logout as authLogout, fetchUserProfile } from '../redux/slices/authSlice';
 import { logout as userLogout } from '../redux/slices/userSlice';
 import AuthModal from './AuthModal';
 import Loading from '../ui/Loading';
@@ -22,11 +22,14 @@ const Navbar = () => {
   const { user: authUser, isAuthenticated, loading } = useSelector((state) => state.auth);
   const { user: profileData } = useSelector((state) => state.user);
 
-  const activeUser = profileData || authUser;
+  const activeUser = authUser || profileData;
 
   useEffect(() => {
-    if (isAuthenticated) setShowLogin(false);
-  }, [isAuthenticated]);
+    if (isAuthenticated) {
+      setShowLogin(false);
+      dispatch(fetchUserProfile());
+    }
+  }, [isAuthenticated, dispatch]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -60,7 +63,7 @@ const Navbar = () => {
   return (
     <>
       {loading && (
-        <div className="fixed inset-0 z-100 bg-white flex flex-col items-center justify-center">
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center">
           <Loading message="Verifying Session..." />
           <div className="mt-2 text-center">
             <p className="text-[#14B8A6] font-black text-xl tracking-tighter">
