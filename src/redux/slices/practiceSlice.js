@@ -6,7 +6,7 @@ export const saveLessonProgress = createAsyncThunk(
   async (lessonId, { dispatch, rejectWithValue }) => {
     try {
       const response = await API.post('/progress/save', { lessonId });
-      dispatch(fetchPracticedSentences());
+      dispatch(fetchPracticedGallery()); 
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to save');
@@ -14,8 +14,8 @@ export const saveLessonProgress = createAsyncThunk(
   }
 );
 
-export const fetchPracticedSentences = createAsyncThunk(
-  'practice/fetchAllItems',
+export const fetchPracticedGallery = createAsyncThunk(
+  'practice/fetchGallery',
   async (_, { rejectWithValue }) => {
     try {
       const response = await API.get('/progress/my-practice');
@@ -29,7 +29,7 @@ export const fetchPracticedSentences = createAsyncThunk(
 const practiceSlice = createSlice({
   name: 'practice',
   initialState: {
-    practicedSentences: [],
+    practicedGallery: [], 
     loading: false,
     error: null,
     saveSuccess: false,
@@ -42,17 +42,21 @@ const practiceSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchPracticedSentences.pending, (state) => {
+      .addCase(fetchPracticedGallery.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchPracticedSentences.fulfilled, (state, action) => {
+      .addCase(fetchPracticedGallery.fulfilled, (state, action) => {
         state.loading = false;
-        state.practicedSentences = action.payload;
+        state.practicedGallery = action.payload; 
       })
-      .addCase(fetchPracticedSentences.rejected, (state, action) => {
+      .addCase(fetchPracticedGallery.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(saveLessonProgress.pending, (state) => {
+        state.saveSuccess = false;
+        state.error = null;
       })
       .addCase(saveLessonProgress.fulfilled, (state) => {
         state.saveSuccess = true;

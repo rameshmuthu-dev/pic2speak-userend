@@ -5,7 +5,7 @@ import {
   Volume2, ChevronLeft, ChevronRight, ArrowLeft, 
   Loader2, Play, Pause, Eye, EyeOff, Shuffle 
 } from 'lucide-react';
-import { fetchPracticedSentences } from '../redux/slices/practiceSlice';
+import { fetchPracticedGallery } from '../redux/slices/practiceSlice';
 import LessonImage from '../ui/LessonImage'
 
 const PracticeDetail = () => {
@@ -13,7 +13,7 @@ const PracticeDetail = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   
-  const { practicedSentences, loading } = useSelector((state) => state.practice);
+  const { practicedGallery, loading } = useSelector((state) => state.practice);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoplay, setIsAutoplay] = useState(false);
   const [showText, setShowText] = useState(false);
@@ -23,20 +23,23 @@ const PracticeDetail = () => {
   const timerRef = useRef(null);
 
   useEffect(() => {
-    dispatch(fetchPracticedSentences());
+    dispatch(fetchPracticedGallery());
   }, [dispatch]);
 
   const lessonSentences = useMemo(() => {
-    let sentences = practicedSentences?.filter(
-      (item) => item.sentence?.lessonId?._id === lessonId
-    ) || [];
+    const currentLessonData = practicedGallery?.find(
+      (item) => item._id === lessonId
+    );
+    
+    let sentences = currentLessonData?.sentences || [];
+
     if (isShuffle) {
       return [...sentences].sort(() => Math.random() - 0.5);
     }
     return sentences;
-  }, [practicedSentences, lessonId, isShuffle]);
+  }, [practicedGallery, lessonId, isShuffle]);
 
-  const currentSentence = lessonSentences[currentIndex]?.sentence;
+  const currentSentence = lessonSentences[currentIndex];
   const progress = lessonSentences.length > 0 ? ((currentIndex + 1) / lessonSentences.length) * 100 : 0;
 
   const playAudio = (url) => {
@@ -68,7 +71,7 @@ const PracticeDetail = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (audioRef.current) audioRef.current.pause();
     };
-  }, [currentIndex, isAutoplay, loading]);
+  }, [currentIndex, isAutoplay, loading, lessonSentences, currentSentence]);
 
   const handleNext = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -123,7 +126,6 @@ const PracticeDetail = () => {
 
           {currentSentence ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 items-center grow overflow-hidden">
-              {/* USING THE REUSABLE IMAGE COMPONENT */}
               <LessonImage src={currentSentence.image?.url} />
 
               <div className="flex flex-col items-center lg:items-start justify-center gap-6 text-center lg:text-left">
@@ -158,7 +160,12 @@ const PracticeDetail = () => {
                 </div>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="flex flex-col items-center justify-center grow">
+              <p className="text-slate-400 font-bold italic text-lg">No sentences found for this lesson.</p>
+              <button onClick={() => navigate(-1)} className="mt-4 text-teal-500 font-bold underline">Go Back</button>
+            </div>
+          )}
         </div>
       </div>
     </div>

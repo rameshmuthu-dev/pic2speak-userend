@@ -1,17 +1,24 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, ArrowRight, RotateCcw, ListChecks, X, Flame } from 'lucide-react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { saveLessonProgress } from '../redux/slices/practiceSlice';
 import Button from '../ui/Button';
 
 const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences }) => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { currentLesson } = useSelector((state) => state.course);
   const { user } = useSelector((state) => state.user);
 
+  useEffect(() => {
+    if (currentLesson?._id) {
+      dispatch(saveLessonProgress(currentLesson._id));
+    }
+  }, [dispatch, currentLesson?._id]);
+
   const getTopicName = () => {
     if (!currentLesson?.topic) return "General Topic";
-    
     if (typeof currentLesson.topic === 'object' && currentLesson.topic !== null) {
       return currentLesson.topic.name || "General Topic";
     }

@@ -2,46 +2,17 @@ import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { History, BookOpen, Loader2, ChevronRight, Layers } from 'lucide-react';
-import { fetchPracticedSentences } from '../redux/slices/practiceSlice';
+import { fetchPracticedGallery } from '../redux/slices/practiceSlice';
 import Button from '../ui/Button';
 
 const PracticePage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { practicedSentences, loading } = useSelector((state) => state.practice);
+  const { practicedGallery, loading } = useSelector((state) => state.practice);
 
   useEffect(() => {
-    dispatch(fetchPracticedSentences());
+    dispatch(fetchPracticedGallery());
   }, [dispatch]);
-
-  const groupedData = practicedSentences?.reduce((acc, item) => {
-    const lessonObj = item.sentence?.lessonId;
-    if (!lessonObj) return acc;
-
-    const partNumber = lessonObj.partNumber || 1;
-    const uniquePartKey = `${lessonObj._id}_part_${partNumber}`;
-
-    if (!acc[uniquePartKey]) {
-      const rawTopic = lessonObj?.topic;
-      const topicDisplayName = (typeof rawTopic === 'object' && rawTopic !== null) 
-        ? rawTopic.name : (lessonObj?.title || "General Topic");
-
-      acc[uniquePartKey] = { 
-        id: lessonObj._id, 
-        uniqueKey: uniquePartKey,
-        title: lessonObj?.title || "Mastered Lesson", 
-        thumbnail: lessonObj?.thumbnail || null,
-        level: lessonObj?.level || 'Beginner',
-        displayLabel: `${topicDisplayName.toUpperCase()} • PART ${partNumber}`,
-        count: 0 
-      };
-    }
-    
-    acc[uniquePartKey].count += 1;
-    return acc;
-  }, {});
-
-  const practicedParts = Object.values(groupedData || {}).reverse();
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white">
@@ -69,31 +40,31 @@ const PracticePage = () => {
           </div>
         </header>
 
-        {practicedParts.length === 0 ? (
+        {practicedGallery.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-slate-100">
              <BookOpen className="text-slate-200 mx-auto mb-4" size={48} />
              <p className="text-slate-400 font-bold text-sm">No mastered lessons yet.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-            {practicedParts.map((part) => (
+            {practicedGallery.map((item) => (
               <div 
-                key={part.uniqueKey} 
-                onClick={() => navigate(`/practice/lesson/${part.id}`)}
+                key={item._id} 
+                onClick={() => navigate(`/practice/lesson/${item._id}`)}
                 className="bg-white rounded-2xl md:rounded-3xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-md transition-all cursor-pointer group flex flex-col h-full"
               >
                 <div className="relative aspect-video overflow-hidden bg-slate-100">
-                  {part.thumbnail?.url ? (
+                  {item.lesson?.thumbnail?.url ? (
                     <img 
-                      src={part.thumbnail.url} 
-                      alt={part.title}
+                      src={item.lesson.thumbnail.url} 
+                      alt={item.lesson.title}
                       className="w-full h-full object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-3xl">📖</div>
                   )}
                   <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[9px] font-black uppercase text-teal-600 shadow-sm">
-                    {part.level}
+                    {item.lesson?.level || 'Beginner'}
                   </div>
                 </div>
 
@@ -101,16 +72,16 @@ const PracticePage = () => {
                   <div className="flex items-center gap-2 text-teal-500 mb-2">
                     <Layers size={12} />
                     <span className="text-[9px] md:text-[10px] font-black uppercase tracking-wider">
-                      {part.displayLabel}
+                      {item.topic?.name?.toUpperCase()} • PART {item.lesson?.partNumber || 1}
                     </span>
                   </div>
                   
                   <h3 className="text-base md:text-xl font-black text-slate-800 mb-1">
-                    {part.title}
+                    {item.lesson?.title}
                   </h3>
                   
                   <p className="text-slate-500 text-xs md:text-sm font-medium mb-4 grow">
-                    Mastered <span className="text-teal-600 font-bold">{part.count} sentences</span>.
+                    Mastered <span className="text-teal-600 font-bold">{item.masteredCount} sentences</span>.
                   </p>
 
                   <Button 
@@ -118,7 +89,7 @@ const PracticePage = () => {
                     className="w-full py-2 md:py-3 rounded-lg md:rounded-xl text-sm font-bold flex items-center justify-center gap-2"
                     onClick={(e) => {
                       e.stopPropagation(); 
-                      navigate(`/practice/lesson/${part.id}`);
+                      navigate(`/practice/lesson/${item._id}`);
                     }}
                   >
                     Keep Practicing
