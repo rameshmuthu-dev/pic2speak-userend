@@ -25,29 +25,43 @@ export const completeLessonAction = createAsyncThunk(
   }
 );
 
+const getInitialUser = () => {
+  try {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const initialUser = getInitialUser();
+
 const userSlice = createSlice({
   name: 'user',
   initialState: {
-    user: JSON.parse(localStorage.getItem('user')) || null,
-    completedLessons: JSON.parse(localStorage.getItem('user'))?.completedLessons || [],
-    isAuthenticated: !!localStorage.getItem('user'),
+    user: initialUser,
+    completedLessons: initialUser?.completedLessons || [],
+    isAuthenticated: !!localStorage.getItem('token'),
     loading: false,
     error: null,
   },
   reducers: {
     setUser: (state, action) => {
-      state.user = action.payload;
-      state.completedLessons = action.payload.completedLessons || [];
-      state.isAuthenticated = true;
-      localStorage.setItem('user', JSON.stringify(action.payload));
+      if (localStorage.getItem('token')) {
+        state.user = action.payload;
+        state.completedLessons = action.payload.completedLessons || [];
+        state.isAuthenticated = true;
+        localStorage.setItem('user', JSON.stringify(action.payload));
+      }
     },
     logout: (state) => {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
       state.user = null;
       state.completedLessons = [];
       state.isAuthenticated = false;
+      state.loading = false;
       state.error = null;
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
     },
     clearUserError: (state) => {
       state.error = null;
@@ -56,18 +70,22 @@ const userSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchUserProfile.fulfilled, (state, action) => {
-        state.loading = false;
-        state.user = action.payload;
-        state.completedLessons = action.payload.completedLessons || [];
-        state.isAuthenticated = true;
-        localStorage.setItem('user', JSON.stringify(action.payload));
+        if (localStorage.getItem('token')) {
+          state.loading = false;
+          state.user = action.payload;
+          state.completedLessons = action.payload.completedLessons || [];
+          state.isAuthenticated = true;
+          localStorage.setItem('user', JSON.stringify(action.payload));
+        }
       })
       .addCase(completeLessonAction.fulfilled, (state, action) => {
-        state.loading = false;
-        state.user = action.payload.user;
-        state.completedLessons = action.payload.user.completedLessons;
-        state.isAuthenticated = true;
-        localStorage.setItem('user', JSON.stringify(action.payload.user));
+        if (state.isAuthenticated && localStorage.getItem('token')) {
+          state.loading = false;
+          state.user = action.payload.user;
+          state.completedLessons = action.payload.user.completedLessons;
+          state.isAuthenticated = true;
+          localStorage.setItem('user', JSON.stringify(action.payload.user));
+        }
       })
       .addMatcher(
         (action) => action.type.endsWith('/pending'),

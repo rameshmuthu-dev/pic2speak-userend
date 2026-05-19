@@ -7,8 +7,11 @@ import Button from '../ui/Button';
 
 const HeroSection = ({ onGetStarted }) => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  
+  const { isAuthenticated, user: authUser } = useSelector((state) => state.auth);
   const { user: profileData } = useSelector((state) => state.user);
+
+  const activeUser = authUser || profileData;
 
   const handleAction = () => {
     if (isAuthenticated) {
@@ -24,7 +27,7 @@ const HeroSection = ({ onGetStarted }) => {
         {isAuthenticated ? (
           <div className="hidden lg:inline-flex items-center self-center lg:self-start gap-2 px-4 py-2 bg-teal-50 text-teal-600 rounded-full text-sm font-bold border border-teal-100">
             <Sparkles size={16} />
-            Keep up the streak, {profileData?.name || "Learner"}!
+            Keep up the streak, {activeUser?.name || "Learner"}!
           </div>
         ) : (
           <div className="hidden lg:inline-flex items-center self-center lg:self-start gap-2 px-4 py-2 bg-teal-50 text-teal-600 rounded-full text-sm font-bold border border-teal-100">
@@ -37,7 +40,7 @@ const HeroSection = ({ onGetStarted }) => {
           {isAuthenticated ? (
             <>
               Welcome Back, <br />
-              <span className="text-teal-500">{profileData?.name || "Friend"}!</span>
+              <span className="text-teal-500">{activeUser?.name || "Friend"}!</span>
             </>
           ) : (
             <>

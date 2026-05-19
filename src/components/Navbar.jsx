@@ -19,7 +19,7 @@ const Navbar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   
-  const { user: authUser, isAuthenticated, loading } = useSelector((state) => state.auth);
+  const { user: authUser, isAuthenticated, isLoading } = useSelector((state) => state.auth);
   const { user: profileData } = useSelector((state) => state.user);
 
   const activeUser = authUser || profileData;
@@ -53,8 +53,13 @@ const Navbar = () => {
   const userIdentifier = activeUser?.name ? activeUser.name.substring(0, 2).toUpperCase() : '??';
 
   const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    localStorage.clear();
+    
     dispatch(authLogout());
     dispatch(userLogout());
+    
     setShowDropdown(false);
     setIsOpen(false);
     navigate('/'); 
@@ -62,13 +67,15 @@ const Navbar = () => {
 
   return (
     <>
-      {loading && (
-        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center">
-          <Loading message="Verifying Session..." />
-          <div className="mt-2 text-center">
-            <p className="text-[#14B8A6] font-black text-xl tracking-tighter">
-              Pic2Speak
-            </p>
+      {isLoading && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/15 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-200">
+          <div className="bg-white/90 p-8 rounded-3xl shadow-2xl flex flex-col items-center justify-center border border-white/50 backdrop-blur-md">
+            <Loading message="Authenticating with Google..." />
+            <div className="mt-4 text-center">
+              <p className="text-[#14B8A6] font-black text-xl tracking-tighter">
+                Pic2Speak
+              </p>
+            </div>
           </div>
         </div>
       )}

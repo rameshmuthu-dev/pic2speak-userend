@@ -10,13 +10,10 @@ const GoogleButton = ({ onAuthSuccess }) => {
   const navigate = useNavigate();
 
   const handleSuccess = async (credentialResponse) => {
-    // This contains the JWT from Google
     const googleToken = credentialResponse.credential;
     
-    // 1. Close modal immediately for better UX
     if (onAuthSuccess) onAuthSuccess(); 
     
-    // 2. Send to backend via Redux Thunk
     const resultAction = await dispatch(googleLogin(googleToken));
     
     if (googleLogin.fulfilled.match(resultAction)) {
@@ -37,9 +34,9 @@ const GoogleButton = ({ onAuthSuccess }) => {
         theme="filled_blue"
         shape="pill"
         width="280"
-        // Force popup mode for all devices to avoid Redirect URI issues
         ux_mode="popup"
         useOneTap={false}
+        prompt="select_account"
       />
     </div>
   );
