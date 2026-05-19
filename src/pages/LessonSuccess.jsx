@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle, ArrowRight, RotateCcw, ListChecks, X, Flame } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { saveLessonProgress } from '../redux/slices/practiceSlice';
+import { completeLessonAction } from '../redux/slices/userSlice';
 import Button from '../ui/Button';
 
 const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences }) => {
@@ -13,7 +14,15 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
 
   useEffect(() => {
     if (currentLesson?._id) {
-      dispatch(saveLessonProgress(currentLesson._id));
+      dispatch(saveLessonProgress(currentLesson._id))
+        .unwrap()
+        .then(() => {
+          dispatch(completeLessonAction({ lessonId: currentLesson._id }));
+        })
+        .catch((err) => {
+          console.error("Error updating lesson components sequential flow:", err);
+          dispatch(completeLessonAction({ lessonId: currentLesson._id }));
+        });
     }
   }, [dispatch, currentLesson?._id]);
 

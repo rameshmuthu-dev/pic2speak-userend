@@ -50,7 +50,7 @@ const PracticePage = () => {
             {practicedGallery.map((item) => (
               <div 
                 key={item._id} 
-                onClick={() => navigate(`/practice/lesson/${item._id}`)}
+                onClick={() => navigate(`/practice/lesson/${item.lesson?._id || item._id}`)}
                 className="bg-white rounded-2xl md:rounded-3xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-md transition-all cursor-pointer group flex flex-col h-full"
               >
                 <div className="relative aspect-video overflow-hidden bg-slate-100">
@@ -89,7 +89,7 @@ const PracticePage = () => {
                     className="w-full py-2 md:py-3 rounded-lg md:rounded-xl text-sm font-bold flex items-center justify-center gap-2"
                     onClick={(e) => {
                       e.stopPropagation(); 
-                      navigate(`/practice/lesson/${item._id}`);
+                      navigate(`/practice/lesson/${item.lesson?._id || item._id}`);
                     }}
                   >
                     Keep Practicing

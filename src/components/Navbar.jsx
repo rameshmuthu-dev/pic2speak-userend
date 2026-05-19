@@ -22,7 +22,7 @@ const Navbar = () => {
   const { user: authUser, isAuthenticated, isLoading } = useSelector((state) => state.auth);
   const { user: profileData } = useSelector((state) => state.user);
 
-  const activeUser = authUser || profileData;
+  const activeUser = profileData || authUser;
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -61,7 +61,7 @@ const Navbar = () => {
     dispatch(userLogout());
     
     setShowDropdown(false);
-    setIsOpen(false);
+    isOpen(false);
     navigate('/'); 
   };
 

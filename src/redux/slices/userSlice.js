@@ -69,6 +69,10 @@ const userSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchUserProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(fetchUserProfile.fulfilled, (state, action) => {
         if (localStorage.getItem('token')) {
           state.loading = false;
@@ -78,29 +82,27 @@ const userSlice = createSlice({
           localStorage.setItem('user', JSON.stringify(action.payload));
         }
       })
+      .addCase(fetchUserProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(completeLessonAction.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(completeLessonAction.fulfilled, (state, action) => {
-        if (state.isAuthenticated && localStorage.getItem('token')) {
+        if (state.isAuthenticated && localStorage.getItem('token') && action.payload?.user) {
           state.loading = false;
           state.user = action.payload.user;
-          state.completedLessons = action.payload.user.completedLessons;
+          state.completedLessons = action.payload.user.completedLessons || [];
           state.isAuthenticated = true;
           localStorage.setItem('user', JSON.stringify(action.payload.user));
         }
       })
-      .addMatcher(
-        (action) => action.type.endsWith('/pending'),
-        (state) => {
-          state.loading = true;
-          state.error = null;
-        }
-      )
-      .addMatcher(
-        (action) => action.type.endsWith('/rejected'),
-        (state, action) => {
-          state.loading = false;
-          state.error = action.payload;
-        }
-      );
+      .addCase(completeLessonAction.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
   },
 });
 
