@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api'; 
 import { toast } from 'react-toastify';
+import { completeLessonAction } from './userSlice'; 
 
 const getInitialUser = () => {
     try {
@@ -148,10 +149,10 @@ const authSlice = createSlice({
                 state.isError = true;
                 state.message = action.payload;
             })
-            .addCase('course/completeLesson/fulfilled', (state, action) => {
-                if (state.user && state.isAuthenticated) {
-                    state.user.streak = action.payload.streak;
-                    localStorage.setItem('user', JSON.stringify(state.user));
+            .addCase(completeLessonAction.fulfilled, (state, action) => {
+                if (state.user && state.isAuthenticated && action.payload?.user) {
+                    state.user = action.payload.user;
+                    localStorage.setItem('user', JSON.stringify(action.payload.user));
                 }
             });
     }

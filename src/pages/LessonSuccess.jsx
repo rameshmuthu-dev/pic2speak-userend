@@ -10,7 +10,7 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { currentLesson } = useSelector((state) => state.course);
-  const { user } = useSelector((state) => state.user);
+  const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
     if (currentLesson?._id) {
@@ -20,7 +20,7 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
           dispatch(completeLessonAction({ lessonId: currentLesson._id }));
         })
         .catch((err) => {
-          console.error("Error updating lesson components sequential flow:", err);
+          console.error("Error updating:", err);
           dispatch(completeLessonAction({ lessonId: currentLesson._id }));
         });
     }
