@@ -30,13 +30,14 @@ const PracticePage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 pt-4 md:pt-10 px-4 md:px-6">
+    <div className="min-h-screen bg-slate-50 pb-20 pt-6 md:pt-12 px-4 md:px-6">
       <div className="max-w-7xl mx-auto">
-        <header className="bg-white border-b border-slate-100 p-4 md:p-12 rounded-xl md:rounded-3xl shadow-sm mb-6 md:mb-12">
-          <h1 className="text-xl md:text-4xl font-black text-slate-900">
+        
+        <div className="mb-6 md:mb-10 px-2">
+          <h1 className="text-2xl md:text-4xl font-black text-slate-900">
             My <span className="text-teal-500">Practice</span> Gallery
           </h1>
-        </header>
+        </div>
 
         {(!practicedGallery || practicedGallery.length === 0) ? (
           <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-slate-100">
@@ -68,10 +69,10 @@ const PracticePage = () => {
                   </p>
                   <Button 
                     variant="primary"
-                    className="w-full py-2"
+                    className="w-full py-2 flex items-center justify-center gap-2 whitespace-nowrap"
                     onClick={(e) => { e.stopPropagation(); navigate(`/practice/lesson/${item.lesson?._id}`); }}
                   >
-                    Keep Practicing <ChevronRight size={16} />
+                    Keep Practicing <ChevronRight size={16} className="shrink-0" />
                   </Button>
                 </div>
               </div>

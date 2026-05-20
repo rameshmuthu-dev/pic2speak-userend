@@ -86,7 +86,7 @@ const Navbar = () => {
             <div className="hidden md:flex items-center gap-8 text-[#334155] font-semibold">
               {isAuthenticated && authUser && (
                 <>
-                  <Link to="/lessons" className="hover:text-[#14B8A6] transition-colors">Lessons</Link>
+                  <Link to="/lessons" className="hover:text-[#14B8A6] transition-colors">Journey</Link>
                   <Link to="/practice" className="hover:text-[#14B8A6] transition-colors">Practice</Link>
                   <div className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 group transition-all">
                     <Flame size={18} className="text-orange-500 fill-orange-500 group-hover:scale-110 transition-transform" />
@@ -171,7 +171,7 @@ const Navbar = () => {
                   </div>
                   <div className="w-10 h-10 rounded-full bg-[#14B8A6] text-white flex items-center justify-center font-bold text-xs">{userIdentifier}</div>
                 </div>
-                <Link to="/lessons" onClick={() => setIsOpen(false)} className="block text-lg font-semibold text-slate-700 hover:text-[#14B8A6]">Lessons</Link>
+                <Link to="/lessons" onClick={() => setIsOpen(false)} className="block text-lg font-semibold text-slate-700 hover:text-[#14B8A6]">Journey</Link>
                 <Link to="/practice" onClick={() => setIsOpen(false)} className="block text-lg font-semibold text-slate-700 hover:text-[#14B8A6]">Practice</Link>
               </>
             )}

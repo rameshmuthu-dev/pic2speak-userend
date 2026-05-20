@@ -17,6 +17,7 @@ const initialState = {
     token: localStorage.getItem('token') || null,
     isAuthenticated: !!localStorage.getItem('token'), 
     isLoading: false, 
+    isGoogleLoggingIn: false,
     isError: false,
     message: '',
 };
@@ -82,6 +83,7 @@ const authSlice = createSlice({
     reducers: {
         reset: (state) => {
             state.isLoading = false;
+            state.isGoogleLoggingIn = false;
             state.isError = false;
             state.message = '';
         },
@@ -94,6 +96,7 @@ const authSlice = createSlice({
             state.token = null;
             state.isAuthenticated = false;
             state.isLoading = false;
+            state.isGoogleLoggingIn = false;
             state.isError = false;
             state.message = '';
             toast.success('Logged out successfully!');
@@ -102,34 +105,34 @@ const authSlice = createSlice({
     extraReducers: (builder) => {
         builder
             .addCase(googleLogin.pending, (state) => {
-                state.isLoading = true;
+                state.isGoogleLoggingIn = true;
                 state.isError = false;
                 state.message = '';
             })
             .addCase(googleLogin.fulfilled, (state, action) => {
-                state.isLoading = false;
+                state.isGoogleLoggingIn = false;
                 state.isAuthenticated = true;
                 state.user = action.payload.user;
                 state.token = action.payload.token;
             })
             .addCase(googleLogin.rejected, (state, action) => {
-                state.isLoading = false;
+                state.isGoogleLoggingIn = false;
                 state.isError = true;
                 state.message = action.payload;
             })
             .addCase(verifyOtp.pending, (state) => {
-                state.isLoading = true;
+                state.isGoogleLoggingIn = true;
                 state.isError = false;
                 state.message = '';
             })
             .addCase(verifyOtp.fulfilled, (state, action) => {
-                state.isLoading = false;
+                state.isGoogleLoggingIn = false;
                 state.isAuthenticated = true;
                 state.user = action.payload.user;
                 state.token = action.payload.token;
             })
             .addCase(verifyOtp.rejected, (state, action) => {
-                state.isLoading = false;
+                state.isGoogleLoggingIn = false;
                 state.isError = true;
                 state.message = action.payload;
             })

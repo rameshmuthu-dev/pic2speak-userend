@@ -50,13 +50,14 @@ const HeroSection = ({ onGetStarted }) => {
           )}
         </h1>
 
+        {/* 🌟 புதுப்பிக்கப்பட்ட பட்டன் பகுதி */}
         <div className="pt-2 flex justify-center lg:justify-start">
           <Button
             onClick={handleAction}
             variant="primary"
             className="w-full lg:w-auto flex items-center justify-center gap-2 px-10"
           >
-            {isAuthenticated ? 'Continue Lessons' : 'Start Learning Now'}
+            {isAuthenticated ? 'Start Your Journey' : 'Start Learning Now'}
             <ArrowRight size={22} />
           </Button>
         </div>

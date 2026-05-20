@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchCategories, fetchTopics, fetchLessonsByTopic, setActiveLevel } from '../redux/slices/courseSlice';
+import { fetchCategories, fetchTopics, fetchLessonsByTopic } from '../redux/slices/courseSlice';
 import { ArrowLeft } from 'lucide-react';
 import CategoryCard from '../components/CategoryCard';
 import LessonCard from '../ui/LessonCard';
@@ -11,54 +11,37 @@ const Lessons = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { level, categoryId, topicId } = useParams();
-  const { categories, topics, lessons, loading, activeLevel } = useSelector((state) => state.course);
+  const { categories, topics, lessons, loading } = useSelector((state) => state.course);
 
   const step = !categoryId ? 'categories' : (!topicId ? 'topics' : 'parts');
 
   useEffect(() => {
     const currentStep = !categoryId ? 'categories' : (!topicId ? 'topics' : 'parts');
     if (currentStep === 'categories') {
-      dispatch(fetchCategories(activeLevel));
+      dispatch(fetchCategories());
     } else if (currentStep === 'topics' && categoryId) {
       dispatch(fetchTopics(categoryId));
     } else if (currentStep === 'parts' && topicId) {
       dispatch(fetchLessonsByTopic(topicId));
     }
-  }, [dispatch, activeLevel, categoryId, topicId]);
-
-  const handleLevelChange = (selectedLevel) => {
-    dispatch(setActiveLevel(selectedLevel));
-    navigate(`/lessons/${selectedLevel.toLowerCase() || 'all'}`);
-  };
+  }, [dispatch, categoryId, topicId]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 pt-10 px-6">
       <div className="max-w-7xl mx-auto">
-        <div className="bg-white border-b border-slate-100 pb-12 rounded-3xl shadow-sm mb-12">
-          <div className="px-10 pt-10">
-            <h1 className="text-4xl font-black text-slate-900 mb-6">
-              Explore <span className="text-teal-500">Lessons</span>
-            </h1>
-            <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
-              {['All', 'Beginner', 'Intermediate', 'Advanced'].map((lvl) => (
-                <button
-                  key={lvl}
-                  onClick={() => handleLevelChange(lvl === 'All' ? '' : lvl)}
-                  className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${
-                    (activeLevel === lvl || (lvl === 'All' && !activeLevel))
-                    ? 'bg-teal-500 text-white shadow-lg'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
-                >
-                  {lvl}
-                </button>
-              ))}
-            </div>
-          </div>
+        
+        {/* 🌟 வெள்ளை பெட்டி இல்லாமல் நேரடியாக பெரிய அளவில் டைட்டில் மட்டும் */}
+        <div className="mb-12 px-2 text-center md:text-left">
+          <h1 className="text-4xl font-black uppercase tracking-wider text-teal-600">
+            YOUR LEARNING JOURNEY
+          </h1>
         </div>
 
         {step !== 'categories' && (
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-teal-600 font-bold mb-6 hover:translate-x-1 transition-all">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="flex items-center gap-2 text-teal-600 font-bold mb-6 hover:translate-x-1 transition-all"
+          >
             <ArrowLeft size={20} /> Back
           </button>
         )}
