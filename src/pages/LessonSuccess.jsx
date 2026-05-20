@@ -19,12 +19,9 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
         .then(() => {
           dispatch(completeLessonAction({ lessonId: currentLesson._id }));
         })
-        .catch((err) => {
-          console.error("Error updating:", err);
-          dispatch(completeLessonAction({ lessonId: currentLesson._id }));
-        });
+        .catch((err) => console.error(err));
     }
-  }, [dispatch, currentLesson?._id]);
+  }, []);
 
   const getTopicName = () => {
     if (!currentLesson?.topic) return "General Topic";
@@ -35,7 +32,7 @@ const LessonSuccess = ({ onNextLesson, onPracticeAgain, onClose, totalSentences 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={onClose}>
       <div 
         className="relative bg-white w-full max-w-sm rounded-3xl shadow-2xl animate-in fade-in zoom-in duration-300"
         onClick={(e) => e.stopPropagation()}
