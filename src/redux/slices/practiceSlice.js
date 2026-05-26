@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api';
 
-export const saveLessonProgress = createAsyncThunk(
+export const saveSubLessonProgress = createAsyncThunk(
   'practice/saveProgress',
   async (lessonId, { rejectWithValue }) => {
     try {
@@ -70,8 +70,24 @@ const practiceSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      .addCase(saveLessonProgress.fulfilled, (state) => {
+      .addCase(saveSubLessonProgress.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(saveSubLessonProgress.fulfilled, (state, action) => {
         state.saveSuccess = true;
+        if (action.payload?.progress) {
+          const index = state.practicedGallery.findIndex(
+            (item) => item._id === action.payload.progress._id
+          );
+          if (index !== -1) {
+            state.practicedGallery[index] = action.payload.progress;
+          } else {
+            state.practicedGallery.unshift(action.payload.progress);
+          }
+        }
+      })
+      .addCase(saveSubLessonProgress.rejected, (state, action) => {
+        state.error = action.payload;
       })
       .addCase(fetchPracticedLessonSentences.pending, (state) => {
         state.sentencesLoading = true;

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, ChevronDown, User, Flame } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
-import { logout as authLogout, fetchUserProfile } from '../redux/slices/authSlice';
-import { logout as userLogout } from '../redux/slices/userSlice';
+import { logout as authLogout } from '../redux/slices/authSlice';
+import { logout as userLogout, fetchUserProfile } from '../redux/slices/userSlice';
 import AuthModal from './AuthModal';
 import Loading from '../ui/Loading';
 
@@ -19,7 +19,12 @@ const Navbar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   
-  const { user: authUser, isAuthenticated, isLoading } = useSelector((state) => state.auth);
+  const { isAuthenticated, isLoading: authLoading } = useSelector((state) => state.auth);
+  const { user: profileUser, loading: userLoading } = useSelector((state) => state.user);
+
+  const isLoading = authLoading || userLoading;
+  const streak = profileUser?.streak || 0;
+  const userIdentifier = profileUser?.name ? profileUser.name.substring(0, 2).toUpperCase() : '??';
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -46,8 +51,6 @@ const Navbar = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
-
-  const userIdentifier = authUser?.name ? authUser.name.substring(0, 2).toUpperCase() : '??';
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -84,18 +87,18 @@ const Navbar = () => {
             </Link>
 
             <div className="hidden md:flex items-center gap-8 text-[#334155] font-semibold">
-              {isAuthenticated && authUser && (
+              {isAuthenticated && profileUser && (
                 <>
                   <Link to="/lessons" className="hover:text-[#14B8A6] transition-colors">Journey</Link>
                   <Link to="/practice" className="hover:text-[#14B8A6] transition-colors">Practice</Link>
                   <div className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 group transition-all">
                     <Flame size={18} className="text-orange-500 fill-orange-500 group-hover:scale-110 transition-transform" />
-                    <span className="text-orange-700 font-bold text-sm">{authUser?.streak || 0}</span>
+                    <span className="text-orange-700 font-bold text-sm">{streak}</span>
                   </div>
                 </>
               )}
               <a href="#about" className="hover:text-[#14B8A6] transition-colors cursor-pointer">About</a>
-              {isAuthenticated && authUser ? (
+              {isAuthenticated && profileUser ? (
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setShowDropdown(!showDropdown)}
@@ -110,7 +113,7 @@ const Navbar = () => {
                     <div className="absolute right-0 mt-3 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
                       <div className="px-4 py-3 border-b border-slate-50">
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Signed in as</p>
-                        <p className="text-sm font-bold text-slate-800 truncate">{authUser.name}</p>
+                        <p className="text-sm font-bold text-slate-800 truncate">{profileUser.name}</p>
                       </div>
                       <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-600 hover:bg-[#14B8A6]/5 hover:text-[#14B8A6] transition-colors font-semibold">
                         <User size={18} /> Profile
@@ -135,11 +138,11 @@ const Navbar = () => {
             </div>
 
             <div className="md:hidden flex items-center gap-3">
-              {isAuthenticated && authUser && (
+              {isAuthenticated && profileUser && (
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
                     <Flame size={16} className="text-orange-500 fill-orange-500" />
-                    <span className="text-orange-700 font-black text-xs">{authUser?.streak || 0}</span>
+                    <span className="text-orange-700 font-black text-xs">{streak}</span>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-[#14B8A6] flex items-center justify-center text-white font-bold text-xs shadow-sm">
                     {userIdentifier}
@@ -162,11 +165,11 @@ const Navbar = () => {
             ref={mobileMenuRef}
             className="md:hidden bg-white border-t border-gray-100 rounded-b-2xl px-6 py-6 space-y-4 shadow-xl animate-in slide-in-from-top-2 duration-200"
           >
-            {isAuthenticated && authUser && (
+            {isAuthenticated && profileUser && (
               <>
                 <div className="pb-4 mb-2 border-b border-gray-50 flex justify-between items-center">
                   <div>
-                    <p className="text-sm font-black text-slate-800">{authUser.name}</p>
+                    <p className="text-sm font-black text-slate-800">{profileUser.name}</p>
                     <p className="text-xs text-slate-400">Student Account</p>
                   </div>
                   <div className="w-10 h-10 rounded-full bg-[#14B8A6] text-white flex items-center justify-center font-bold text-xs">{userIdentifier}</div>

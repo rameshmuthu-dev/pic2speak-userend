@@ -13,18 +13,6 @@ export const fetchUserProfile = createAsyncThunk(
   }
 );
 
-export const completeLessonAction = createAsyncThunk(
-  'user/completeLesson',
-  async (data, { rejectWithValue }) => {
-    try {
-      const response = await API.post(`/user/complete-lesson/${data.lessonId}`, data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to save progress');
-    }
-  }
-);
-
 const getInitialUser = () => {
   try {
     const savedUser = localStorage.getItem('user');
@@ -40,7 +28,6 @@ const userSlice = createSlice({
   name: 'user',
   initialState: {
     user: initialUser,
-    completedLessons: initialUser?.completedLessons || [],
     isAuthenticated: !!localStorage.getItem('token'),
     loading: false,
     error: null,
@@ -49,7 +36,6 @@ const userSlice = createSlice({
     setUser: (state, action) => {
       if (localStorage.getItem('token')) {
         state.user = action.payload;
-        state.completedLessons = action.payload.completedLessons || [];
         state.isAuthenticated = true;
         localStorage.setItem('user', JSON.stringify(action.payload));
       }
@@ -58,7 +44,6 @@ const userSlice = createSlice({
       localStorage.removeItem('user');
       localStorage.removeItem('token');
       state.user = null;
-      state.completedLessons = [];
       state.isAuthenticated = false;
       state.loading = false;
       state.error = null;
@@ -77,29 +62,11 @@ const userSlice = createSlice({
         if (localStorage.getItem('token')) {
           state.loading = false;
           state.user = action.payload;
-          state.completedLessons = action.payload.completedLessons || [];
           state.isAuthenticated = true;
           localStorage.setItem('user', JSON.stringify(action.payload));
         }
       })
       .addCase(fetchUserProfile.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(completeLessonAction.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(completeLessonAction.fulfilled, (state, action) => {
-        if (state.isAuthenticated && localStorage.getItem('token') && action.payload?.user) {
-          state.loading = false;
-          state.user = action.payload.user;
-          state.completedLessons = action.payload.user.completedLessons || [];
-          state.isAuthenticated = true;
-          localStorage.setItem('user', JSON.stringify(action.payload.user));
-        }
-      })
-      .addCase(completeLessonAction.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

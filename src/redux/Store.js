@@ -5,6 +5,7 @@ import sentenceReducer from './slices/sentenceSlice';
 import userReducer from './slices/userSlice';
 import feedbackReducer from './slices/feedbackSlice';
 import practiceReducer from './slices/practiceSlice';
+import unlockReducer from './slices/unlockSlice';
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +15,8 @@ export const store = configureStore({
     user: userReducer,
     feedback: feedbackReducer,
    practice: practiceReducer,
+   unlock: unlockReducer,
+   
 
   },
 });

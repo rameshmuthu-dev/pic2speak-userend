@@ -34,13 +34,14 @@ const PracticePage = () => {
 
   const totalMasteredSessions = practicedGallery?.reduce((acc, item) => acc + (item.practiceCount || 0), 0) || 0;
 
-  const filteredAndSortedGallery = Math.random() && practicedGallery
+  const filteredAndSortedGallery = practicedGallery
     ? [...practicedGallery]
         .filter((item) =>
           item.lesson?.title?.toLowerCase().includes(searchTerm.toLowerCase())
         )
         .sort((a, b) => {
           if (sortBy === 'highest') return (b.practiceCount || 0) - (a.practiceCount || 0);
+          if (sortBy === 'recent') return new Date(b.lastPracticed) - new Date(a.lastPracticed);
           return 0; 
         })
     : [];
@@ -48,7 +49,6 @@ const PracticePage = () => {
   return (
     <div className="min-h-screen bg-slate-50 pb-20 pt-6 md:pt-12 px-4 md:px-6">
       <div className="max-w-7xl mx-auto">
-        
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 px-2">
           <div>
             <h1 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">
@@ -57,7 +57,7 @@ const PracticePage = () => {
             <p className="text-slate-500 text-sm mt-1 font-medium">Review and reinforce your mastered concepts.</p>
           </div>
 
-          {practicedGallery && practicedGallery.length > 0 && (
+          {practicedGallery?.length > 0 && (
             <div className="flex items-center gap-2 bg-teal-50 border border-teal-100 px-4 py-2.5 rounded-2xl self-start sm:self-center">
               <Award className="text-teal-600" size={20} />
               <div className="text-xs md:text-sm">
@@ -71,7 +71,7 @@ const PracticePage = () => {
         {(!practicedGallery || practicedGallery.length === 0) ? (
           <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-slate-100">
              <BookOpen className="text-slate-200 mx-auto mb-4" size={48} />
-             <p className="text-slate-400 font-bold text-sm">No mastered lessons yet.</p>
+             <p className="text-slate-400 font-bold text-sm">No mastered parts yet.</p>
           </div>
         ) : (
           <>
@@ -80,7 +80,7 @@ const PracticePage = () => {
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
                   type="text"
-                  placeholder="Search mastered lessons..."
+                  placeholder="Search mastered parts..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
@@ -122,7 +122,7 @@ const PracticePage = () => {
 
                     <div className="p-4 flex flex-col grow">
                       <h3 className="text-base font-black text-slate-800 mb-1 line-clamp-1 group-hover:text-teal-600 transition-colors">
-                        {item.lesson?.title || "Untitled Lesson"}
+                        {item.lesson?.title || "Untitled Part"}
                       </h3>
                       <p className="text-slate-500 text-xs font-medium mb-4 grow">
                         Mastered <span className="text-teal-600 font-bold">{item.practiceCount || 0} times</span>.

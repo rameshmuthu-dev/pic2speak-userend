@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api'; 
 import { toast } from 'react-toastify';
-import { completeLessonAction } from './userSlice'; 
 
 const getInitialUser = () => {
     try {
@@ -36,7 +35,7 @@ export const fetchUserProfile = createAsyncThunk(
             return thunkAPI.rejectWithValue(response.data.message);
         } catch (error) {
             if (error.response?.status === 401) {
-                thunkAPI.dispatch(authSlice.actions.logout());
+                thunkAPI.dispatch(logout());
             }
             return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
         }
@@ -151,12 +150,6 @@ const authSlice = createSlice({
                 state.isLoading = false;
                 state.isError = true;
                 state.message = action.payload;
-            })
-            .addCase(completeLessonAction.fulfilled, (state, action) => {
-                if (state.user && state.isAuthenticated && action.payload?.user) {
-                    state.user = action.payload.user;
-                    localStorage.setItem('user', JSON.stringify(action.payload.user));
-                }
             });
     }
 });

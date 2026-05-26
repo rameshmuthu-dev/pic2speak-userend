@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'https://pic2speak-backend.onrender.com/api/v1',
-    // baseURL: 'http://localhost:8081/api/v1'
+  // baseURL: 'https://pic2speak-backend.onrender.com/api/v1',
+    baseURL: 'http://localhost:8081/api/v1'
 
  
 });
