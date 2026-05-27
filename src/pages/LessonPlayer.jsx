@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSingleSubLesson } from '../redux/slices/courseSlice';
 import { Volume2, ChevronLeft, ChevronRight, ArrowLeft, Loader2, Play, Pause } from 'lucide-react';
 import LessonSuccess from './LessonSuccess';
-import FeedbackSection from '../pages/FeedbackSection';
+
+const FeedbackSection = lazy(() => import('../pages/FeedbackSection'));
 
 const LessonPlayer = () => {
   const { subLessonId } = useParams();
@@ -121,7 +122,7 @@ const LessonPlayer = () => {
         <LessonSuccess
           lessonId={subLessonId}
           totalSentences={sentences.length}
-          onClose={() => setIsFinished(false)}
+          close={() => setIsFinished(false)}
           onNextLesson={handleGoToNextLesson}
         />
       )}
@@ -158,6 +159,7 @@ const LessonPlayer = () => {
                   <img
                     src={currentSentence.image?.url}
                     alt="Context"
+                    loading="lazy"
                     className={`w-full h-full object-cover transition-opacity duration-500 ${isImageReady ? 'opacity-100' : 'opacity-0'}`}
                     onLoad={() => setIsImageReady(true)}
                   />
@@ -195,7 +197,9 @@ const LessonPlayer = () => {
         </div>
       </div>
       <div className="bg-white border-t border-slate-100 py-10">
-        <FeedbackSection />
+        <Suspense fallback={<div className="text-center py-4 text-slate-400">Loading Feedback...</div>}>
+          <FeedbackSection />
+        </Suspense>
       </div>
     </div>
   );

@@ -25,7 +25,12 @@ const LessonList = ({ lessons, onSelect }) => {
             <div className="bg-white p-8 shadow-sm group-hover:shadow-xl transition-all border-b-8 border-teal-500 text-center h-full flex flex-col">
               <div className="w-full h-48 bg-slate-100 rounded-2xl mb-4 overflow-hidden flex items-center justify-center">
                 {imageUrl ? (
-                  <img src={imageUrl} alt={lesson.title} className="w-full h-full object-cover" />
+                  <img 
+                    src={imageUrl} 
+                    alt={lesson.title} 
+                    loading="lazy"
+                    className="w-full h-full object-cover" 
+                  />
                 ) : (
                   <span className="text-6xl">📖</span>
                 )}

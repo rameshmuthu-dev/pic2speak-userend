@@ -13,6 +13,7 @@ const LessonCard = ({ lesson, onStart }) => {
           <img 
             src={lesson.thumbnail.url} 
             alt={lesson.title}
+            loading="lazy"
             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
           />
         ) : (

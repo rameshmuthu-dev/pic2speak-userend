@@ -114,7 +114,12 @@ const PracticePage = () => {
                   >
                     <div className="relative aspect-video overflow-hidden bg-slate-100">
                       {item.lesson?.thumbnail?.url ? (
-                        <img src={item.lesson.thumbnail.url} alt={item.lesson.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img 
+                          src={item.lesson.thumbnail.url} 
+                          alt={item.lesson.title} 
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-3xl">📖</div>
                       )}

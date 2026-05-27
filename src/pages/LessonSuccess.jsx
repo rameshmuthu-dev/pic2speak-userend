@@ -7,7 +7,7 @@ import Button from '../ui/Button';
 import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 
-const LessonSuccess = ({ lessonId, onNextLesson, onPracticeAgain, onClose, totalSentences }) => {
+const LessonSuccess = ({ lessonId, onNextLesson, onClose, totalSentences }) => {
   const navigate = useDomNavigate();
   const dispatch = useDispatch();
   const { subLessons } = useSelector((state) => state.course);
@@ -63,7 +63,7 @@ const LessonSuccess = ({ lessonId, onNextLesson, onPracticeAgain, onClose, total
             <Button onClick={onNextLesson} variant="primary" className="w-full py-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-xl shadow-teal-100 transition-transform active:scale-95 text-lg">
               Go to Next Part <ArrowRight size={20} />
             </Button>
-            <button onClick={onPracticeAgain} className="w-full py-2 flex items-center justify-center gap-2 text-slate-500 font-bold hover:text-slate-800 transition-colors">
+            <button onClick={onClose} className="w-full py-2 flex items-center justify-center gap-2 text-slate-500 font-bold hover:text-slate-800 transition-colors">
               <RotateCcw size={18} /> Practice Again
             </button>
             <div className="pt-4 border-t border-slate-50">

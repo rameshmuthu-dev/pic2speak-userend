@@ -178,6 +178,7 @@ const PracticeDetail = () => {
                   <img
                     src={currentSentence.image?.url}
                     alt="Context"
+                    loading="lazy"
                     className={`w-full h-full object-cover transition-opacity duration-500 ${isImageReady ? 'opacity-100' : 'opacity-0'}`}
                     onLoad={() => setIsImageReady(true)}
                   />

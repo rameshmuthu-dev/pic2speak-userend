@@ -1,14 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchCategories, fetchTopics, fetchLessonsByTopic, fetchSubLessonsByLesson } from '../redux/slices/courseSlice';
 import { fetchUnlockStatus } from '../redux/slices/unlockSlice';
 import { ArrowLeft } from 'lucide-react';
-import FeedbackSection from '../pages/FeedbackSection';
-import CategoryList from '../learning/CategoryList';
-import TopicList from '../learning/TopicList';
-import LessonList from '../learning/LessonList';
-import SubLessonList from '../learning/SubLessonList';
+
+const FeedbackSection = lazy(() => import('../pages/FeedbackSection'));
+const CategoryList = lazy(() => import('../learning/CategoryList'));
+const TopicList = lazy(() => import('../learning/TopicList'));
+const LessonList = lazy(() => import('../learning/LessonList'));
+const SubLessonList = lazy(() => import('../learning/SubLessonList'));
 
 const Lessons = () => {
   const dispatch = useDispatch();
@@ -66,29 +67,33 @@ const Lessons = () => {
         {loading && <p className="text-center text-teal-500 font-bold animate-pulse">Loading...</p>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {step === 'categories' && (
-            <CategoryList categories={categories} onSelect={(id) => navigate(`/lessons/${id}`)} />
-          )}
-          {step === 'topics' && (
-            <TopicList topics={topics} onSelect={(id) => navigate(`/lessons/${categoryId}/${id}`)} />
-          )}
-          {step === 'lessons' && (
-            <LessonList 
-              lessons={lessons} 
-              onSelect={(id) => navigate(`/lessons/${categoryId}/${topicId}/${id}`)} 
-            />
-          )}
-          {step === 'sublessons' && (
-            <SubLessonList 
-              subLessons={subLessons} 
-              completedSubLessons={user?.completedLessons || []} 
-              onSelect={(id) => navigate(`/sentence/${id}`)} 
-            />
-          )}
+          <Suspense fallback={<div className="col-span-full text-center text-teal-500 font-bold">Loading content...</div>}>
+            {step === 'categories' && (
+              <CategoryList categories={categories} onSelect={(id) => navigate(`/lessons/${id}`)} />
+            )}
+            {step === 'topics' && (
+              <TopicList topics={topics} onSelect={(id) => navigate(`/lessons/${categoryId}/${id}`)} />
+            )}
+            {step === 'lessons' && (
+              <LessonList 
+                lessons={lessons} 
+                onSelect={(id) => navigate(`/lessons/${categoryId}/${topicId}/${id}`)} 
+              />
+            )}
+            {step === 'sublessons' && (
+              <SubLessonList 
+                subLessons={subLessons} 
+                completedSubLessons={user?.completedLessons || []} 
+                onSelect={(id) => navigate(`/sentence/${id}`)} 
+              />
+            )}
+          </Suspense>
         </div>
 
         <div className="mt-20 pt-10 border-t border-slate-200">
-          <FeedbackSection />
+          <Suspense fallback={<div className="text-center text-slate-400">Loading Feedback...</div>}>
+            <FeedbackSection />
+          </Suspense>
         </div>
       </div>
     </div>
