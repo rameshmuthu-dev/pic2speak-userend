@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { X } from 'lucide-react';
 import GoogleButton from './GoogleButton';
-import { toast } from 'react-toastify';
+import { toast } from 'react-toastify'
 
 const AuthModal = ({ isOpen, onClose }) => {
   const { user } = useSelector((state) => state.auth);
