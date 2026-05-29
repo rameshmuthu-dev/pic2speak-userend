@@ -26,10 +26,10 @@ const LessonPlayer = () => {
   const timerRef = useRef(null);
 
   useEffect(() => {
-    if (!currentSubLesson && subLessonId) {
+    if (subLessonId) {
       dispatch(fetchSingleSubLesson(subLessonId));
     }
-  }, [dispatch, subLessonId, currentSubLesson]);
+  }, [dispatch, subLessonId]);
 
   useEffect(() => {
     setCurrentIndex(0);
@@ -47,13 +47,36 @@ const LessonPlayer = () => {
       if (url) {
         if (audioRef.current) {
           audioRef.current.pause();
+          audioRef.current.removeAttribute('src');
+          audioRef.current.load();
           audioRef.current.onended = null;
-        }
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        audio.play().catch(() => resolve());
-        audio.onended = () => {
           audioRef.current = null;
+        }
+
+        const timestamp = new Date().getTime();
+        const freshUrl = url.includes('?') ? `${url}&v=${timestamp}` : `${url}?v=${timestamp}`;
+
+        const audio = new Audio();
+        audio.src = freshUrl;
+        audio.preload = "auto";
+        
+        audioRef.current = audio;
+
+        audio.play()
+          .then(() => {})
+          .catch(() => resolve());
+
+        audio.onended = () => {
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+          }
+          resolve();
+        };
+
+        audio.onerror = () => {
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+          }
           resolve();
         };
       } else {
@@ -75,7 +98,11 @@ const LessonPlayer = () => {
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
-      if (audioRef.current) audioRef.current.pause();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+      }
     };
   }, [currentIndex, sentences.length, loading, isFinished, isAutoplay, isImageReady]);
 
@@ -157,7 +184,7 @@ const LessonPlayer = () => {
                     </div>
                   )}
                   <img
-                    src={currentSentence.image?.url}
+                    src={currentSentence.image?.url ? (currentSentence.image.url.includes('?') ? `${currentSentence.image.url}&v=${Date.now()}` : `${currentSentence.image.url}?v=${Date.now()}`) : ''}
                     alt="Context"
                     loading="lazy"
                     className={`w-full h-full object-cover transition-opacity duration-500 ${isImageReady ? 'opacity-100' : 'opacity-0'}`}
@@ -169,7 +196,7 @@ const LessonPlayer = () => {
                 <div className="space-y-2 lg:space-y-6">
                   <span className="px-4 py-1.5 bg-teal-50 text-teal-600 rounded-full text-xs font-black uppercase tracking-widest">Natural Learning</span>
                   <h2 className="text-3xl sm:text-5xl lg:text-7xl font-black text-slate-800 leading-tight">
-                    {currentSentence.englishText}
+                    {currentSentence.englishText || currentSentence.title || currentSentence.name}
                   </h2>
                 </div>
                 <div className="flex items-center gap-6 lg:gap-10">
