@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import heroImage from "../assets/heroImage.png";
+import heroImage from '../assets/heroImage.png'
 import { ArrowRight, Sparkles, Volume2, Image as ImageIcon } from 'lucide-react';
 import Button from '../ui/Button';
 
@@ -50,7 +50,7 @@ const HeroSection = ({ onGetStarted }) => {
           )}
         </h1>
 
-        {/* 🌟 புதுப்பிக்கப்பட்ட பட்டன் பகுதி */}
+       
         <div className="pt-2 flex justify-center lg:justify-start">
           <Button
             onClick={handleAction}
