@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logout } from '../redux/slices/authSlice'; 
 
 const isProduction = process.env.NODE_ENV === 'production' || import.meta.env?.MODE === 'production';
 
@@ -23,10 +24,16 @@ API.interceptors.request.use(
 
 API.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
+  async (error) => {
+    if (!error.response || error.response.status === 401) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        
+        const { store } = await import('../redux/store');
+        store.dispatch(logout());
+        
         window.location.href = '/';
       }
     }
