@@ -17,7 +17,7 @@ const CategoryCard = ({ category, onClick }) => {
                <Lock size={24} className="text-slate-600" />
              </div>
            </div>
-        )}
+        )};
 
         <div className="w-full h-48 bg-slate-100 rounded-2xl mb-4 overflow-hidden flex items-center justify-center">
           {category.thumbnail?.url ? (
