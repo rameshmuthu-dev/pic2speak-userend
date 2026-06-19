@@ -27,13 +27,16 @@ API.interceptors.response.use(
   async (error) => {
     if (!error.response || error.response.status === 401) {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        
-        
-        const { store } = await import('../redux/Store');
-        store.dispatch(logout());
-        
+        try {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.clear();
+          
+          const { store } = await import('../redux/Store');
+          store.dispatch(logout());
+        } catch (e) {
+          localStorage.clear();
+        }
         window.location.href = '/';
       }
     }

@@ -11,10 +11,13 @@ const getInitialUser = () => {
     }
 };
 
+const hasToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+const initialUser = getInitialUser();
+
 const initialState = {
-    user: getInitialUser(),
-    token: localStorage.getItem('token') || null,
-    isAuthenticated: !!localStorage.getItem('token'), 
+    user: hasToken ? initialUser : null,
+    token: hasToken || null,
+    isAuthenticated: !!(hasToken && initialUser), 
     isLoading: false, 
     isGoogleLoggingIn: false,
     isError: false,
@@ -87,9 +90,13 @@ const authSlice = createSlice({
             state.message = '';
         },
         logout: (state) => {
-            localStorage.removeItem('user');
-            localStorage.removeItem('token');
-            localStorage.clear(); 
+            try {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+                localStorage.clear();
+            } catch (e) {
+                localStorage.clear();
+            }
 
             state.user = null;
             state.token = null;
