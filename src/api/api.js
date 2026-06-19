@@ -31,7 +31,7 @@ API.interceptors.response.use(
         localStorage.removeItem('user');
         
         
-        const { store } = await import('../redux/store');
+        const { store } = await import('../redux/Store');
         store.dispatch(logout());
         
         window.location.href = '/';
