@@ -156,7 +156,7 @@ const LessonPlayer = () => {
       <div className="w-full bg-slate-200 h-1.5 shrink-0">
         <div className="bg-teal-500 h-full transition-all duration-700 ease-out" style={{ width: `${progress}%` }}></div>
       </div>
-      <div className="flex flex-col items-center justify-center p-4 lg:p-10 h-[80vh]">
+      <div className="flex flex-col items-center justify-center p-4 lg:p-10 min-h-[80vh] h-auto">
         <div className="w-full max-w-6xl h-full flex flex-col">
           <div className="flex items-center justify-between mb-4 px-2 shrink-0">
             <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-teal-600 transition-all">
@@ -175,9 +175,9 @@ const LessonPlayer = () => {
           </div>
 
           {currentSentence ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 items-center grow overflow-hidden">
-              <div className="flex justify-center items-center overflow-hidden h-full">
-                <div className="bg-white rounded-3xl shadow-2xl border-4 lg:border-8 border-white overflow-hidden aspect-square max-h-64 sm:max-h-80 lg:max-h-full w-auto relative">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 items-center h-auto">
+              <div className="flex justify-center items-center h-auto shrink-0">
+                <div className="bg-white rounded-3xl shadow-2xl border-4 lg:border-8 border-white overflow-hidden aspect-square max-h-64 sm:max-h-80 lg:max-h-[500px] w-full lg:w-auto relative">
                   {!isImageReady && (
                     <div className="absolute inset-0 bg-slate-100 animate-pulse flex items-center justify-center">
                       <Loader2 className="animate-spin text-slate-300" size={40} />
@@ -192,10 +192,10 @@ const LessonPlayer = () => {
                   />
                 </div>
               </div>
-              <div className="flex flex-col items-center lg:items-start justify-center gap-6 lg:gap-10 text-center lg:text-left">
+              <div className="flex flex-col items-center lg:items-start justify-center gap-6 lg:gap-10 text-center lg:text-left h-auto">
                 <div className="space-y-2 lg:space-y-6">
                   <span className="px-4 py-1.5 bg-teal-50 text-teal-600 rounded-full text-xs font-black uppercase tracking-widest">Natural Learning</span>
-                  <h2 className="text-3xl sm:text-5xl lg:text-7xl font-black text-slate-800 leading-tight">
+                  <h2 className="text-3xl sm:text-5xl lg:text-7xl font-black text-slate-800 leading-tight break-words hyphens-auto">
                     {currentSentence.englishText || currentSentence.title || currentSentence.name}
                   </h2>
                 </div>
