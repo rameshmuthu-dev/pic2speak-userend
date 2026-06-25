@@ -134,6 +134,12 @@ const LessonPlayer = () => {
     }
   };
 
+  const handleCloseSuccess = () => {
+    setIsFinished(false);
+    setCurrentIndex(0);
+    setIsAutoplay(false);
+  };
+
   if (loading && sentences.length === 0) return (
     <div className="flex items-center justify-center min-h-screen bg-slate-50">
       <Loader2 className="animate-spin text-teal-500" size={32} />
@@ -149,7 +155,7 @@ const LessonPlayer = () => {
         <LessonSuccess
           lessonId={subLessonId}
           totalSentences={sentences.length}
-          close={() => setIsFinished(false)}
+          onClose={handleCloseSuccess}
           onNextLesson={handleGoToNextLesson}
         />
       )}
