@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pic2speak.vercel.app/sitemap.xml
