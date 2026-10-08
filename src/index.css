@@ -1,26 +1,28 @@
 @import "tailwindcss";
 
+/* ─── Font tokens ────────────────────────────────────────────────────────────
+   font-sans    → Inter      — body text, dynamic learning content, metadata
+   font-display → Fredoka    — brand/logo text, static UI headings, buttons
+──────────────────────────────────────────────────────────────────────────── */
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Fredoka", system-ui, sans-serif;
 }
-/* 
-@theme {
-  --font-sans: "Courier New", monospace;
-} */
+
 @layer base {
   * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    
-    
   }
 
   body {
-   
-    @apply bg-slate-50 text-slate-900 min-h-screen
+    /* Inter is the default body font — applies to all general and dynamic text */
+    font-family: var(--font-sans);
+    @apply bg-slate-50 text-slate-900 min-h-screen;
   }
 }
+
 html {
   scroll-behavior: smooth;
 }

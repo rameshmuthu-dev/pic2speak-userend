@@ -1,22 +1,24 @@
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './slices/authSlice';
-import courseReducer from './slices/courseSlice';
-import sentenceReducer from './slices/sentenceSlice';
 import userReducer from './slices/userSlice';
-import feedbackReducer from './slices/feedbackSlice';
-import practiceReducer from './slices/practiceSlice';
-import unlockReducer from './slices/unlockSlice';
+import adventureMapReducer from './slices/adventureMapSlice';
+import lessonProgressReducer from './slices/lessonProgressSlice';
+import sceneContentReducer from './slices/sceneContentSlice';
+import lessonUnlockReducer from './slices/lessonUnlockSlice';
+import characterProgressReducer from './slices/characterProgressSlice';
+import userProgressReducer from './slices/userProgressSlice';
+import rewardReducer from './slices/rewardSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    course: courseReducer,
-    sentence: sentenceReducer,
     user: userReducer,
-    feedback: feedbackReducer,
-   practice: practiceReducer,
-   unlock: unlockReducer,
-   
-
+    adventureMap: adventureMapReducer,
+    lessonProgress: lessonProgressReducer,
+    sceneContent: sceneContentReducer,
+    lessonUnlock: lessonUnlockReducer,
+    characterProgress: characterProgressReducer,
+    userProgress: userProgressReducer,
+    reward: rewardReducer,
   },
 });

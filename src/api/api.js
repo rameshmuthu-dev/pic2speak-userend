@@ -1,11 +1,11 @@
 import axios from 'axios';
-import { logout } from '../redux/slices/authSlice'; 
+import { logout } from '../redux/slices/authSlice';
 
 const isProduction = process.env.NODE_ENV === 'production' || import.meta.env?.MODE === 'production';
 
 const API = axios.create({
-  baseURL: isProduction 
-    ? 'https://pic2speak-backend.onrender.com/api/v1' 
+  baseURL: isProduction
+    ? 'https://pic2speak-backend.onrender.com/api/v1'
     : 'http://localhost:8081/api/v1'
 });
 
@@ -25,13 +25,13 @@ API.interceptors.request.use(
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (!error.response || error.response.status === 401) {
+    if (error.response && error.response.status === 401) {
       if (typeof window !== 'undefined') {
         try {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           localStorage.clear();
-          
+
           const { store } = await import('../redux/Store');
           store.dispatch(logout());
         } catch (e) {

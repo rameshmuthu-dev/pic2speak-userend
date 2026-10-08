@@ -1,36 +1,34 @@
 import React, { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import AdventureMap from './pages/AdventureMap';
 
 const HomePage = lazy(() => import('./home/HomePage'));
-const Lessons = lazy(() => import('./pages/Lessons'));
 const ProtectedRoute = lazy(() => import('./components/ProtectedRoute'));
-const LessonPlayer = lazy(() => import('./pages/LessonPlayer'));
-const PracticePage = lazy(() => import('./pages/PracticePage'));
-const PracticeDetail = lazy(() => import('./pages/PracticeDetail'));
+const SentenceList = lazy(() => import('./pages/SentenceList'));
 
 function App() {
+  const location = useLocation();
+  const isFullscreenPage =
+    location.pathname === '/adventure-map' ||
+    location.pathname.startsWith('/sentence-list/');
+
   return (
-    <div className="font-sans min-h-screen bg-warm-cream flex flex-col">
+    <div className="font-sans min-h-screen w-full max-w-full overflow-x-hidden bg-warm-cream flex flex-col">
       <Navbar />
-      <main className="container mx-auto px-4 py-6 grow">
+      <main className={isFullscreenPage ? 'grow flex flex-col min-h-0 w-full' : 'container mx-auto px-4 py-6 grow w-full max-w-full overflow-x-hidden'}>
         <Suspense fallback={<div className="text-center py-10 text-xl font-semibold">Loading...</div>}>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route element={<ProtectedRoute />}>
-              <Route path="/practice" element={<PracticePage />} />
-              <Route path="/practice/lesson/:subLessonId" element={<PracticeDetail />} />
-              <Route path="/lessons" element={<Lessons />} />
-              <Route path="/lessons/:categoryId" element={<Lessons />} />
-              <Route path="/lessons/:categoryId/:topicId" element={<Lessons />} />
-              <Route path="/lessons/:categoryId/:topicId/:lessonId" element={<Lessons />} />
-              <Route path="/sentence/:subLessonId" element={<LessonPlayer />} /> 
+              <Route path="/adventure-map" element={<AdventureMap />} />
+              <Route path="/sentence-list/:lessonMasterId" element={<SentenceList />} />
             </Route>
           </Routes>
         </Suspense>
       </main>
-      <Footer />
+      {!isFullscreenPage && <Footer />}
     </div>
   );
 }
