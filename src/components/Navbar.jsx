@@ -23,18 +23,12 @@ import Loading from '../ui/Loading';
    CONFIG
    ───────────────────────────────────────────────────────────── */
 
-// Routes where the "app shell" (desktop sidebar + mobile top bar + bottom bar)
-// is shown instead of the normal top navbar.
-// startsWith match → '/sentence-list' also covers '/sentence-list/:id'.
-// Add more routes here (e.g. '/practice') when you want the shell there too.
 const SHELL_ROUTES = ['/adventure-map', '/sentence-list'];
 
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-// Offsets the page content so it never hides behind the fixed shell.
-// Mobile bar heights are measured at runtime and exposed as CSS variables.
 const SHELL_CSS = `
 @media (min-width: 1024px) {
   body.app-shell-active #root { padding-left: 18rem; }
@@ -45,9 +39,14 @@ const SHELL_CSS = `
     padding-bottom: var(--shell-bottom-h, 0px);
   }
 }
+/* Sidebar scroll area: scrolls when screen is short, scrollbar hidden */
+.shell-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.shell-scroll::-webkit-scrollbar { display: none; }
 `;
 
-// Items for the legacy top-navbar "More" dropdown / mobile menu (visual only)
 const MAP_NAV_ITEMS = [
   { label: 'Play',             icon: '🎮' },
   { label: 'Weekly Challenge', icon: '📅' },
@@ -56,7 +55,6 @@ const MAP_NAV_ITEMS = [
   { label: 'Settings',         icon: '⚙️' },
 ];
 
-// Items for the sidebar (visual only — no routes yet)
 const SHELL_NAV_ITEMS = [
   { label: 'Play',            icon: '🎮' },
   { label: 'Daily Challenge', icon: '📅' },
@@ -74,7 +72,7 @@ const MORE_SHEET_ITEMS = [
 ];
 
 /* ─────────────────────────────────────────────────────────────
-   LANGUAGE DROPDOWN (moved from AdventureMap — design unchanged)
+   LANGUAGE DROPDOWN
    ───────────────────────────────────────────────────────────── */
 
 const LanguageDropdown = ({ languagesList, resolvedLanguage, onSelect, variant = 'compact' }) => {
@@ -85,7 +83,8 @@ const LanguageDropdown = ({ languagesList, resolvedLanguage, onSelect, variant =
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-        setIsOpen(false); setQuery('');
+        setIsOpen(false);
+        setQuery('');
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -109,7 +108,7 @@ const LanguageDropdown = ({ languagesList, resolvedLanguage, onSelect, variant =
         <button
           onClick={toggleOpen}
           disabled={!hasLanguages}
-          className={`relative w-full overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-100 via-cyan-100 to-cyan-200 px-3 py-3.5 text-left shadow-sm transition-shadow duration-300 ${hasLanguages ? 'cursor-pointer hover:shadow-md' : 'opacity-50 cursor-not-allowed'}`}
+          className={`relative w-full overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-100 via-cyan-100 to-cyan-200 px-3 py-3 text-left shadow-sm transition-shadow duration-300 ${hasLanguages ? 'cursor-pointer hover:shadow-md' : 'opacity-50 cursor-not-allowed'}`}
         >
           <span className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-teal-600 ring-1 ring-teal-200">
@@ -144,17 +143,26 @@ const LanguageDropdown = ({ languagesList, resolvedLanguage, onSelect, variant =
       {isOpen && hasLanguages && (
         <div className="absolute left-0 mt-2 w-56 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
           <div className="p-2 border-b border-slate-100">
-            <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder="Search language..."
-              className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-full focus:outline-none focus:border-teal-500" />
+              className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-full focus:outline-none focus:border-teal-500"
+            />
           </div>
           <div className="max-h-56 overflow-y-auto py-1">
-            {filteredLanguages.length ? filteredLanguages.map((l) => (
-              <button key={l.code}
-                onClick={() => { onSelect(l.code); setIsOpen(false); setQuery(''); }}
-                className={`w-full text-left px-4 py-2 text-xs font-semibold cursor-pointer hover:bg-slate-50 ${l.code === resolvedLanguage ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}
-              >{l.name}</button>
-            )) : (
+            {filteredLanguages.length ? (
+              filteredLanguages.map((l) => (
+                <button
+                  key={l.code}
+                  onClick={() => { onSelect(l.code); setIsOpen(false); setQuery(''); }}
+                  className={`w-full text-left px-4 py-2 text-xs font-semibold cursor-pointer hover:bg-slate-50 ${l.code === resolvedLanguage ? 'bg-teal-50 text-teal-700' : 'text-slate-600'}`}
+                >
+                  {l.name}
+                </button>
+              ))
+            ) : (
               <div className="px-4 py-3 text-xs text-slate-400 text-center">No language found</div>
             )}
           </div>
@@ -165,7 +173,7 @@ const LanguageDropdown = ({ languagesList, resolvedLanguage, onSelect, variant =
 };
 
 /* ─────────────────────────────────────────────────────────────
-   ANIMATED SHEET (moved from AdventureMap — design unchanged)
+   ANIMATED SHEET
    ───────────────────────────────────────────────────────────── */
 
 const AnimatedSheet = ({ isOpen, onClose, direction = 'bottom', children }) => {
@@ -175,7 +183,6 @@ const AnimatedSheet = ({ isOpen, onClose, direction = 'bottom', children }) => {
   useEffect(() => {
     if (isOpen) {
       setIsRendered(true);
-      // Small delay so the element is in the DOM before the transition starts
       const raf = requestAnimationFrame(() => setIsVisible(true));
       return () => cancelAnimationFrame(raf);
     } else {
@@ -200,7 +207,6 @@ const AnimatedSheet = ({ isOpen, onClose, direction = 'bottom', children }) => {
 
   return (
     <div className={`${direction === 'bottom' ? 'lg:hidden' : ''} fixed inset-0 z-[200] flex flex-col ${isTop ? 'justify-start' : 'justify-end'} ${desktopWrapperClass}`}>
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         style={{
@@ -209,7 +215,6 @@ const AnimatedSheet = ({ isOpen, onClose, direction = 'bottom', children }) => {
         }}
         onClick={onClose}
       />
-      {/* Sheet Content */}
       <div
         className={`bg-white w-full flex flex-col relative z-10 ${isTop ? 'rounded-b-3xl lg:max-h-none' : 'rounded-t-3xl max-h-[88vh]'} ${desktopSheetClass}`}
         style={{
@@ -229,13 +234,11 @@ const AnimatedSheet = ({ isOpen, onClose, direction = 'bottom', children }) => {
    ───────────────────────────────────────────────────────────── */
 
 const Navbar = ({ languageSelector = null }) => {
-  // legacy top-navbar state
   const [isOpen, setIsOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showMoreDropdown, setShowMoreDropdown] = useState(false);
 
-  // app-shell state
   const [showMobileProfile, setShowMobileProfile] = useState(false);
   const [showMobileMore, setShowMobileMore] = useState(false);
 
@@ -262,13 +265,11 @@ const Navbar = ({ languageSelector = null }) => {
   const streak         = profileUser?.streak || 0;
   const userIdentifier = profileUser?.name ? profileUser.name.substring(0, 2).toUpperCase() : '??';
 
-  // Show the app shell (sidebar / top bar / bottom bar) on these routes
   const isShellRoute = SHELL_ROUTES.some(
     (route) => location.pathname === route || location.pathname.startsWith(`${route}/`)
   );
   const showShell = isShellRoute && isAuthenticated;
 
-  // Language (shared with AdventureMap through useActiveLanguage)
   const [activeLanguage, setActiveLanguage] = useActiveLanguage();
   const languagesList = useLanguageOptions(showShell);
   const resolvedLanguage = languagesList.some((l) => l.code === activeLanguage)
@@ -282,7 +283,6 @@ const Navbar = ({ languageSelector = null }) => {
     }
   }, [isAuthenticated, dispatch]);
 
-  // Stats / rewards shown in the sidebar must be available on every shell page
   useEffect(() => {
     if (showShell) {
       dispatch(fetchMyStats());
@@ -298,14 +298,12 @@ const Navbar = ({ languageSelector = null }) => {
     setShowMobileMore(false);
   }, [location.pathname]);
 
-  // Flag on <body> so the shell CSS can push the page content aside
   useEffect(() => {
     if (!showShell) return undefined;
     document.body.classList.add('app-shell-active');
     return () => document.body.classList.remove('app-shell-active');
   }, [showShell]);
 
-  // Measure the fixed mobile bars → CSS variables used for page padding
   useEffect(() => {
     if (!showShell) return undefined;
     const root = document.documentElement;
@@ -388,115 +386,111 @@ const Navbar = ({ languageSelector = null }) => {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════
-          APP SHELL — desktop sidebar + mobile top bar + bottom bar
-          (shown on SHELL_ROUTES for logged-in users)
-          ════════════════════════════════════════════════════════ */}
+      {/* APP SHELL */}
       {showShell && (
         <>
           <style>{SHELL_CSS}</style>
 
-          {/* ══ DESKTOP: SIDEBAR ══ */}
-          <aside className="hidden lg:flex fixed left-0 top-0 w-72 h-screen bg-white flex-col border-r border-slate-100 shrink-0 overflow-hidden z-30">
-            <div className="p-4 lg:p-3 xl:p-4 flex flex-col h-full gap-3 overflow-hidden">
-              {/* Sidebar Header: Branding + Utility Row */}
-              <div className="flex flex-col gap-2.5 shrink-0 min-w-0">
-                {/* Branding + tagline */}
-                <div className="flex items-start justify-between gap-2 min-w-0">
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="bg-[#14B8A6] w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-sm shrink-0">P2S</div>
-                      <span className="text-xl font-bold text-[#0F172A] whitespace-nowrap leading-none">Pic2<span className="text-[#14B8A6]">Speak</span></span>
-                    </div>
-                    <p className="text-[11px] text-teal-600 font-semibold whitespace-nowrap leading-tight">
-                      ✨ One step at a time
-                    </p>
-                  </div>
-                </div>
-
-                {/* Utility row: language (left) + notifications (right) */}
-                <div className="flex items-center justify-between gap-2 min-w-0 pr-0.5">
-                  <LanguageDropdown languagesList={languagesList} resolvedLanguage={resolvedLanguage} onSelect={setActiveLanguage} variant="card" />
-                  <div
-                    role="button"
-                    aria-label="Notifications"
-                    className="relative shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-white border border-slate-200 cursor-pointer shadow-sm hover:bg-slate-50 hover:border-teal-200 transition-colors"
-                  >
-                    <span className="text-sm leading-none">🔔</span>
-                    <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-                  </div>
-                </div>
-              </div>
-
-              {/* User Profile */}
-              <div onClick={() => setShowMobileProfile(true)} className="flex items-center gap-3 bg-white border border-slate-100 rounded-[20px] p-3 shadow-sm shrink-0 cursor-pointer hover:bg-slate-50 transition-colors">
-                <div className="w-14 h-14 rounded-full bg-[#dcf5fa] flex items-center justify-center shrink-0 overflow-hidden">
-                  <img src={profileAvatar} className="w-[90%] h-[90%] object-contain" alt="Profile" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-[#0F172A] text-[14px] truncate">{userLoading ? 'Loading...' : profileUser?.name || 'User'}</p>
-                  <p className="text-[11px] text-slate-500 mb-1.5 truncate">Let's learn together!</p>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block text-[10px] font-bold text-white bg-teal-500 rounded-full px-2 py-0.5 shrink-0 shadow-sm">{statsLoading ? '...' : `Level ${progressStats?.level ?? 1}`}</span>
-                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${progressStats?.progressPercent ?? 0}%` }}></div>
+          {/* DESKTOP SIDEBAR */}
+          <aside className="hidden lg:flex fixed left-0 top-0 w-72 h-[100dvh] bg-white flex-col border-r border-slate-100 shrink-0 overflow-hidden z-30">
+            <div className="p-3.5 flex flex-col h-full gap-2.5 min-h-0">
+              {/* Top Section (scrolls if screen is short, so it never runs under Premium) */}
+              <div className="shell-scroll flex flex-col gap-2.5 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                {/* Header */}
+                <div className="flex flex-col gap-2 shrink-0 min-w-0">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="flex flex-col gap-0 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="bg-[#14B8A6] w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-sm shrink-0">P2S</div>
+                        <span className="text-xl font-bold text-[#0F172A] whitespace-nowrap leading-none">Pic2<span className="text-[#14B8A6]">Speak</span></span>
+                      </div>
+                      <p className="text-[11px] text-teal-600 font-semibold whitespace-nowrap leading-tight mt-1">
+                        ✨ One step at a time
+                      </p>
                     </div>
                   </div>
-                  <p className="text-[9px] text-slate-400 mt-1 text-right font-bold leading-none">{statsLoading ? '...' : `${progressStats?.currentLevelXP ?? 0} / ${progressStats?.nextLevelXP ?? 100} XP`}</p>
-                </div>
-              </div>
 
-              {/* Stats Row */}
-              <div className="grid grid-cols-3 gap-2 shrink-0">
-                <div className="bg-slate-50 border border-slate-100 rounded-xl py-1 flex flex-col items-center justify-center shadow-sm">
-                  <span className="text-lg leading-none">🔥</span>
-                  <span className="text-xs font-bold text-slate-800 mt-0.5">{profileUser?.streak ?? 0}</span>
-                  <span className="text-[8px] text-slate-500 uppercase tracking-wide font-semibold">Streak</span>
+                  <div className="flex items-center justify-between gap-2 min-w-0 pr-0.5">
+                    <LanguageDropdown languagesList={languagesList} resolvedLanguage={resolvedLanguage} onSelect={setActiveLanguage} variant="card" />
+                    <div
+                      role="button"
+                      aria-label="Notifications"
+                      className="relative shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-white border border-slate-200 cursor-pointer shadow-sm hover:bg-slate-50 hover:border-teal-200 transition-colors"
+                    >
+                      <span className="text-sm leading-none">🔔</span>
+                      <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-xl py-1 flex flex-col items-center justify-center shadow-sm">
-                  <span className="text-lg leading-none">🪙</span>
-                  <span className="text-xs font-bold text-slate-800 mt-0.5">{totalCoins}</span>
-                  <span className="text-[8px] text-slate-500 uppercase tracking-wide font-semibold">Coins</span>
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-xl py-1 flex flex-col items-center justify-center shadow-sm">
-                  <span className="text-lg leading-none">💎</span>
-                  <span className="text-xs font-bold text-slate-800 mt-0.5">{totalGems}</span>
-                  <span className="text-[8px] text-slate-500 uppercase tracking-wide font-semibold">Gems</span>
-                </div>
-              </div>
 
-              {/* Navigation */}
-              <div className="flex-1 flex flex-col min-h-0 lg:overflow-hidden overflow-y-auto mt-1">
-                <nav className="flex flex-col gap-1">
+                {/* User Profile */}
+                <div onClick={() => setShowMobileProfile(true)} className="flex items-center gap-3 bg-white border border-slate-100 rounded-[22px] p-2.5 shadow-sm shrink-0 cursor-pointer hover:bg-slate-50 transition-colors">
+                  <div className="w-11 h-11 rounded-full bg-[#dcf5fa] flex items-center justify-center shrink-0 overflow-hidden">
+                    <img src={profileAvatar} className="w-[90%] h-[90%] object-contain" alt="Profile" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-[#0F172A] text-[14px] truncate">{userLoading ? 'Loading...' : profileUser?.name || 'User'}</p>
+                    <p className="text-[10px] text-slate-500 mb-1 truncate leading-tight">Let's learn together!</p>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block text-[9px] font-bold text-white bg-teal-500 rounded-full px-2 py-0.5 shrink-0 shadow-sm">{statsLoading ? '...' : `Level ${progressStats?.level ?? 1}`}</span>
+                      <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-400 rounded-full" style={{ width: `${progressStats?.progressPercent ?? 0}%` }} />
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-slate-400 mt-1 text-right font-bold leading-none">{statsLoading ? '...' : `${progressStats?.currentLevelXP ?? 0} / ${progressStats?.nextLevelXP ?? 100} XP`}</p>
+                  </div>
+                </div>
+
+                {/* Stats Row */}
+                <div className="grid grid-cols-3 gap-1.5 shrink-0">
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl py-1 flex flex-col items-center justify-center shadow-sm">
+                    <span className="text-base leading-none">🔥</span>
+                    <span className="text-xs font-bold text-slate-800 mt-0.5">{profileUser?.streak ?? 0}</span>
+                    <span className="text-[8px] text-slate-400 uppercase tracking-tight font-bold">Streak</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl py-1 flex flex-col items-center justify-center shadow-sm">
+                    <span className="text-base leading-none">🪙</span>
+                    <span className="text-xs font-bold text-slate-800 mt-0.5">{totalCoins}</span>
+                    <span className="text-[8px] text-slate-400 uppercase tracking-tight font-bold">Coins</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl py-1 flex flex-col items-center justify-center shadow-sm">
+                    <span className="text-base leading-none">💎</span>
+                    <span className="text-xs font-bold text-slate-800 mt-0.5">{totalGems}</span>
+                    <span className="text-[8px] text-slate-400 uppercase tracking-tight font-bold">Gems</span>
+                  </div>
+                </div>
+
+                {/* Navigation */}
+                <nav className="flex flex-col gap-1.5 mt-1 pb-2 shrink-0">
                   <button
                     onClick={goToMap}
                     className="w-full flex items-center gap-3 px-3 py-2 bg-teal-50 text-teal-700 font-bold rounded-xl transition-colors text-[13px] text-left cursor-pointer border-l-4 border-teal-500 shadow-sm"
                   >
-                    <span>🗺️</span> {mapTitle}
+                    <span className="text-base">🗺️</span><span className="truncate">{mapTitle}</span>
                   </button>
                   {SHELL_NAV_ITEMS.map((navItem, i) => (
                     <button key={i} className="w-full flex items-center gap-3 px-3 py-2 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 hover:text-teal-700 transition-colors text-[13px] text-left cursor-pointer">
-                      <span>{navItem.icon}</span> {navItem.label}
+                      <span className="text-base">{navItem.icon}</span><span>{navItem.label}</span>
                     </button>
                   ))}
                 </nav>
+              </div>
 
-                {/* Go Premium Bottom */}
-                <div className="mt-auto pt-2 shrink-0">
-                  <button className="w-full flex items-center gap-3 bg-[#FFFBF0] border border-[#FDE68A] p-2.5 rounded-2xl text-left hover:bg-[#FEF3C7] transition-colors cursor-pointer shadow-sm">
-                    <span className="text-2xl">👑</span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-[#D97706]">Go Premium</p>
-                      <p className="text-[10px] text-[#92400E] leading-snug truncate">Unlock all levels, AI &amp; more!</p>
-                    </div>
-                    <span className="ml-auto w-6 h-6 rounded-full bg-[#F59E0B] text-white flex items-center justify-center text-xs shrink-0 shadow-sm">→</span>
-                  </button>
-                </div>
+              {/* Go Premium Bottom (always separate from the nav, never overlaps) */}
+              <div className="pt-2.5 shrink-0 border-t border-slate-100 bg-white">
+                <button className="w-full flex items-center gap-3 bg-[#FFFBF0] border border-[#FDE68A] p-2.5 rounded-2xl text-left hover:bg-[#FEF3C7] transition-colors cursor-pointer shadow-sm">
+                  <span className="text-2xl shrink-0">👑</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-[#D97706] leading-tight">Go Premium</p>
+                    <p className="text-[10px] text-[#92400E] leading-snug truncate">Unlock all levels & AI!</p>
+                  </div>
+                  <span className="ml-auto w-5 h-5 rounded-full bg-[#F59E0B] text-white flex items-center justify-center text-[10px] shrink-0 shadow-sm">→</span>
+                </button>
               </div>
             </div>
           </aside>
 
-          {/* ══ MOBILE ONLY: TOP BAR ══ */}
+          {/* MOBILE TOP BAR */}
           <div
             ref={shellTopRef}
             className="lg:hidden fixed top-0 inset-x-0 w-full bg-white z-40 shadow-sm flex flex-col rounded-b-3xl"
@@ -516,7 +510,7 @@ const Navbar = ({ languageSelector = null }) => {
                 <LanguageDropdown languagesList={languagesList} resolvedLanguage={resolvedLanguage} onSelect={setActiveLanguage} />
                 <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-slate-50 border border-slate-100 shadow-sm cursor-pointer">
                   <span className="text-sm">🔔</span>
-                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                 </div>
                 <button onClick={() => setShowMobileProfile(true)} className="w-8 h-8 rounded-full bg-teal-600 text-white font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
                   {userIdentifier}
@@ -525,7 +519,7 @@ const Navbar = ({ languageSelector = null }) => {
             </div>
           </div>
 
-          {/* ══ MOBILE ONLY: BOTTOM NAV ══ */}
+          {/* MOBILE BOTTOM NAV */}
           <div
             ref={shellBottomRef}
             className="lg:hidden fixed bottom-0 inset-x-0 w-full bg-white z-40 border-t border-slate-100 shadow-[0_-2px_12px_rgba(0,0,0,0.07)] rounded-t-3xl"
@@ -537,7 +531,7 @@ const Navbar = ({ languageSelector = null }) => {
                   <span className="text-[26px] leading-none">🗺️</span>
                 </div>
                 <span className="text-[12px] leading-tight font-bold text-teal-600">Map</span>
-                <div className="w-4 h-0.5 bg-[#14B8A6] rounded-full mt-0.5"></div>
+                <div className="w-4 h-0.5 bg-[#14B8A6] rounded-full mt-0.5" />
               </button>
               <div className="flex flex-col items-center gap-1 w-16 cursor-pointer">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center">
@@ -566,9 +560,8 @@ const Navbar = ({ languageSelector = null }) => {
             </div>
           </div>
 
-          {/* ══ PROFILE SHEET ══ */}
+          {/* PROFILE SHEET */}
           <AnimatedSheet isOpen={showMobileProfile} onClose={() => setShowMobileProfile(false)} direction="top">
-            {/* Desktop Header / Close button */}
             <div className="hidden lg:flex items-center justify-between px-6 py-4">
               <h2 className="text-[22px] font-bold text-[#0F172A]">My Profile</h2>
               <button onClick={() => setShowMobileProfile(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
@@ -576,7 +569,6 @@ const Navbar = ({ languageSelector = null }) => {
               </button>
             </div>
 
-            {/* Mobile drag handle & header */}
             <div className="lg:hidden w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-3 shrink-0" />
             <div className="lg:hidden px-5 pb-3 flex items-center justify-between shrink-0">
               <h2 className="text-xl font-bold text-[#0F172A]">My Profile</h2>
@@ -584,8 +576,6 @@ const Navbar = ({ languageSelector = null }) => {
             </div>
 
             <div className="px-5 lg:px-6 pb-6 lg:pb-6 flex flex-col gap-4 lg:gap-5 overflow-y-auto lg:overflow-visible max-h-[85vh] lg:max-h-none">
-
-              {/* Profile Info Row */}
               <div className="flex items-center gap-5">
                 <div className="w-[100px] h-[100px] lg:w-[115px] lg:h-[115px] rounded-full bg-[#dcf5fa] flex items-center justify-center shrink-0 border-4 border-white shadow-sm relative">
                   <img src={profileAvatar} className="w-[90%] h-[90%] object-contain" alt="Profile" />
@@ -597,14 +587,13 @@ const Navbar = ({ languageSelector = null }) => {
                   <div className="flex items-center gap-3">
                     <span className="text-[11px] font-bold text-white bg-teal-500 rounded-full px-2.5 py-0.5 shrink-0">{statsLoading ? '...' : `Level ${progressStats?.level ?? 1}`}</span>
                     <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden max-w-[160px]">
-                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${progressStats?.progressPercent ?? 0}%` }}></div>
+                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${progressStats?.progressPercent ?? 0}%` }} />
                     </div>
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1 font-bold text-right max-w-[160px] ml-auto">{statsLoading ? '...' : `${progressStats?.currentLevelXP ?? 0} / ${progressStats?.nextLevelXP ?? 100} XP`}</p>
                 </div>
               </div>
 
-              {/* Stats Row */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-white border border-slate-100 rounded-[16px] py-3 flex flex-col items-center shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
                   <span className="text-2xl mb-0.5">🔥</span>
@@ -623,7 +612,6 @@ const Navbar = ({ languageSelector = null }) => {
                 </div>
               </div>
 
-              {/* Action Rows */}
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] cursor-pointer hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3"><span className="text-xl">👤</span><span className="font-bold text-[#0F172A] text-[14px]">Account Information</span></div>
@@ -649,7 +637,7 @@ const Navbar = ({ languageSelector = null }) => {
             </div>
           </AnimatedSheet>
 
-          {/* ══ MORE SHEET (mobile) ══ */}
+          {/* MORE SHEET */}
           <AnimatedSheet isOpen={showMobileMore} onClose={() => setShowMobileMore(false)} direction="bottom">
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-3 shrink-0" />
             <div className="px-5 pb-3 flex items-center justify-between shrink-0">
@@ -685,37 +673,28 @@ const Navbar = ({ languageSelector = null }) => {
         </>
       )}
 
-      {/* ════════════════════════════════════════════════════════
-          LEGACY TOP NAVBAR — landing page & all other routes
-          ════════════════════════════════════════════════════════ */}
+      {/* LEGACY TOP NAVBAR */}
       {!showShell && (
         <nav className="bg-white border-b-2 border-[#14B8A6]/10 sticky top-0 z-40 shadow-sm rounded-2xl">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-              {/* Branding */}
               <Link to="/" className="flex items-center gap-2 shrink-0">
                 <div className="bg-[#14B8A6] w-9 h-9 rounded-xl flex items-center justify-center text-white font-black">P2S</div>
                 <span className="text-xl font-bold text-[#0F172A]">Pic2<span className="text-[#14B8A6]">Speak</span></span>
               </Link>
 
-              {/* ── DESKTOP NAV ── */}
               <div className="hidden md:flex items-center gap-4 lg:gap-6 text-[#334155] font-semibold min-w-0">
                 {isAuthenticated && profileUser && (
                   <>
                     <NavLink to="/adventure-map" className={navLinkClass}>Adventure Map</NavLink>
-
-                    {/* Language selector slot */}
                     {languageSelector && (
                       <div className="shrink-0">{languageSelector}</div>
                     )}
-
-                    {/* Streak badge */}
                     <div className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 group transition-all shrink-0">
                       <Flame size={18} className="text-orange-500 fill-orange-500 group-hover:scale-110 transition-transform" />
                       <span className="text-orange-700 font-bold text-sm">{streak}</span>
                     </div>
 
-                    {/* More dropdown */}
                     <div className="relative shrink-0" ref={moreRef}>
                       <button
                         onClick={() => setShowMoreDropdown(!showMoreDropdown)}
@@ -743,7 +722,6 @@ const Navbar = ({ languageSelector = null }) => {
 
                 <a href="#about" className="hover:text-[#14B8A6] transition-colors cursor-pointer shrink-0">About</a>
 
-                {/* Profile dropdown or Get Started */}
                 {isAuthenticated && profileUser ? (
                   <div className="relative shrink-0" ref={dropdownRef}>
                     <button
@@ -783,7 +761,6 @@ const Navbar = ({ languageSelector = null }) => {
                 )}
               </div>
 
-              {/* ── MOBILE: streak + avatar + hamburger ── */}
               <div className="md:hidden flex items-center gap-3">
                 {isAuthenticated && profileUser && (
                   <div className="flex items-center gap-2">
@@ -808,7 +785,6 @@ const Navbar = ({ languageSelector = null }) => {
             </div>
           </div>
 
-          {/* ── MOBILE MENU ── */}
           {isOpen && (
             <div
               ref={mobileMenuRef}
@@ -828,7 +804,6 @@ const Navbar = ({ languageSelector = null }) => {
                     🗺️ Adventure Map
                   </NavLink>
 
-                  {/* Map nav items in mobile menu */}
                   <div className="flex flex-col gap-1 border-t border-slate-50 pt-3">
                     {MAP_NAV_ITEMS.map((item) => (
                       <button
