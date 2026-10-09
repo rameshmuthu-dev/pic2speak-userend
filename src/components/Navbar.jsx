@@ -15,7 +15,7 @@ import {
   selectTotalGems,
 } from '../redux/slices/rewardSlice';
 import { useActiveLanguage, useLanguageOptions } from '../hooks/Useactivelanguage';
-import profileAvatar from '../assets/profile/profile.png';
+import profileAvatar from '../assets/profile/profile.webp';
 import AuthModal from './AuthModal';
 import Loading from '../ui/Loading';
 

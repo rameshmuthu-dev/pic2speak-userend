@@ -8,7 +8,7 @@ import {
   Flame, Coins, Gem, Lock, Compass, Trophy,
 } from 'lucide-react';
 import Button from '../ui/Button';
-import herosectionimg from '../assets/hero/herosectionimg.png';
+import herosectionimg from '../assets/hero/herosectionimg.webp';
 
 /* ---------- Static data (outside component) ---------- */
 const LEARNING_FEATURES = [

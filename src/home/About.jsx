@@ -1,5 +1,5 @@
 import React from 'react';
-import aboutImage from "../assets/aboutImage.png";
+import aboutImage from "../assets/aboutImage.webp";
 import { Heart, Sparkles } from 'lucide-react';
 
 const About = () => {
