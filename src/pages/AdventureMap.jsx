@@ -1289,6 +1289,23 @@ const AdventureMap = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    html.style.overscrollBehavior = 'none';
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+    };
+  }, []);
 
   const [containerWidth, setContainerWidth] = useState(DESIGN_WIDTH);
   const [languageDb, setLanguageDb] = useState({});
@@ -1738,7 +1755,7 @@ const AdventureMap = () => {
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-full bg-slate-100 text-slate-800 overflow-hidden font-sans">
+    <div className="flex flex-col lg:flex-row h-[100dvh] lg:h-screen w-full bg-slate-100 text-slate-800 overflow-hidden font-sans">
       <aside className="hidden lg:flex w-72 h-full bg-white flex-col border-r border-slate-100 shrink-0 overflow-hidden z-30">
         <div className="p-4 lg:p-3 xl:p-4 flex flex-col h-full gap-3 overflow-hidden">
           {/* Sidebar Header: Branding + Utility Row */}
