@@ -2087,37 +2087,37 @@ const AdventureMap = () => {
             {/* ══ MOBILE ONLY: BOTTOM NAV ══ */}
       
       <div className="lg:hidden w-full bg-white z-40 shrink-0 border-t border-slate-100 shadow-[0_-2px_12px_rgba(0,0,0,0.07)] rounded-t-3xl" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
-        <div className="flex items-center justify-around px-2 py-2">
-          <div className="flex flex-col items-center gap-0.5 w-14 cursor-pointer">
-            <div className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center">
-              <span className="text-xl">🗺️</span>
+        <div className="flex items-center justify-around px-2 py-3">
+          <div className="flex flex-col items-center gap-1 w-16 cursor-pointer">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">
+              <span className="text-[26px] leading-none">🗺️</span>
             </div>
-            <span className="text-[10px] font-bold text-[#14B8A6]">Map</span>
+            <span className="text-[12px] leading-tight font-bold text-teal-600">Map</span>
             <div className="w-4 h-0.5 bg-[#14B8A6] rounded-full mt-0.5"></div>
           </div>
-          <div className="flex flex-col items-center gap-0.5 w-14 cursor-pointer opacity-50">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center">
-              <span className="text-xl">🎮</span>
+          <div className="flex flex-col items-center gap-1 w-16 cursor-pointer">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+              <span className="text-[26px] leading-none">🎮</span>
             </div>
-            <span className="text-[10px] font-semibold text-slate-500">Play</span>
+            <span className="text-[12px] leading-tight font-semibold text-[#000000]">Play</span>
           </div>
-          <div className="flex flex-col items-center gap-0.5 w-14 cursor-pointer opacity-50">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center">
-              <span className="text-xl">📅</span>
+          <div className="flex flex-col items-center gap-1 w-16 cursor-pointer">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+              <span className="text-[26px] leading-none">📅</span>
             </div>
-            <span className="text-[10px] font-semibold text-slate-500">Daily</span>
+            <span className="text-[12px] leading-tight font-semibold text-[#000000]">Weekly</span>
           </div>
-          <div className="flex flex-col items-center gap-0.5 w-14 cursor-pointer opacity-50">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center">
-              <span className="text-xl">📊</span>
+          <div className="flex flex-col items-center gap-1 w-16 cursor-pointer">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+              <span className="text-[26px] leading-none">📊</span>
             </div>
-            <span className="text-[10px] font-semibold text-slate-500">Progress</span>
+            <span className="text-[12px] leading-tight font-semibold text-[#000000]">Progress</span>
           </div>
-          <button onClick={() => setShowMobileMore(true)} className="flex flex-col items-center gap-0.5 w-14 cursor-pointer opacity-50 hover:opacity-100 transition-opacity bg-transparent border-none p-0">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center">
-              <span className="text-lg font-bold text-slate-500 leading-none">•••</span>
+          <button onClick={() => setShowMobileMore(true)} className="flex flex-col items-center gap-1 w-16 cursor-pointer bg-transparent border-none p-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+              <span className="text-[24px] font-bold text-[#64748B] leading-none">•••</span>
             </div>
-            <span className="text-[10px] font-semibold text-slate-500">More</span>
+            <span className="text-[12px] leading-tight font-semibold text-[#000000]">More</span>
           </button>
         </div>
       </div>
