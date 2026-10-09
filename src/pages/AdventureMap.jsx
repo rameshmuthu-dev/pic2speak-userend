@@ -263,50 +263,36 @@ const MoreLessonsComingSoon = ({ y }) => {
 const GlassSweep = ({ cardWidth, cardHeight, isHovered }) => {
   const groupRef = useRef(null);
   const rafRef = useRef(null);
-  const stateRef = useRef({ isHovered, startTime: null, pos: isHovered ? -cardWidth * 0.7 : cardWidth });
-
-  useEffect(() => {
-    stateRef.current.isHovered = isHovered;
-    stateRef.current.startTime = null;
-    stateRef.current.pos = isHovered ? -cardWidth * 0.7 : cardWidth;
-  }, [isHovered, cardWidth]);
 
   useEffect(() => {
     if (REDUCED_MOTION) return;
     const DURATION = 1900;
     const sweepW = cardWidth * 0.7;
+    const totalDist = cardWidth + sweepW;
+    let startTime = null;
 
     const tick = (timestamp) => {
-      const s = stateRef.current;
-      if (!s.startTime) s.startTime = timestamp;
-      const elapsed = timestamp - s.startTime;
-      const t = Math.min(elapsed / DURATION, 1);
-
-      const from = s.isHovered ? cardWidth : -sweepW;
-      const to = s.isHovered ? -sweepW : cardWidth;
-      s.pos = from + (to - from) * t;
+      if (!startTime) startTime = timestamp;
+      const elapsed = timestamp - startTime;
+      const progress = (elapsed % DURATION) / DURATION;
+      const pos = isHovered 
+        ? cardWidth - progress * totalDist 
+        : -sweepW + progress * totalDist;
 
       if (groupRef.current) {
-        groupRef.current.x(s.pos);
+        groupRef.current.x(pos);
         groupRef.current.getLayer()?.batchDraw();
       }
 
-      if (t >= 1) {
-        s.startTime = null;
-        rafRef.current = null;
-        return;
-      }
       rafRef.current = requestAnimationFrame(tick);
     };
 
-    stateRef.current.startTime = null;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(tick);
-    
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [isHovered, cardWidth, cardHeight]);
+  }, [cardWidth, isHovered]);
 
   if (REDUCED_MOTION) {
     return (
@@ -705,17 +691,17 @@ const UserLessonCard = ({ item, slotNumber, activeLanguage, progress, isUnlocked
           listening={false}
         />
 
-        {isUnlocked && (
-          <Group
-            clipFunc={(ctx) => {
-              ctx.beginPath();
-              ctx.roundRect(0, 0, cardWidth, cardHeight, radius);
-              ctx.closePath();
-            }}
-          >
-            <GlassSweep cardWidth={cardWidth} cardHeight={cardHeight} isHovered={isHovered} />
-          </Group>
-        )}
+                {isUnlocked && (
+                  <Group
+                    clipFunc={(ctx) => {
+                      ctx.beginPath();
+                      ctx.roundRect(0, 0, cardWidth, cardHeight, radius);
+                      ctx.closePath();
+                    }}
+                  >
+                    <GlassSweep cardWidth={cardWidth} cardHeight={cardHeight} isHovered={isHovered} />
+                  </Group>
+                )}
 
         <KonvaText
           text={titleText}
