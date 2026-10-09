@@ -1,15 +1,6 @@
-/**
- * sceneContentSlice.js
- *
- * Uses the new userAuth endpoint to fetch scene contents for a specific lesson and language.
- */
-
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api';
 
-// ---------------------------------------------------------------------------
-// Thunk: fetchSceneContents
-// ---------------------------------------------------------------------------
 export const fetchSceneContents = createAsyncThunk(
   'sceneContent/fetchUserSceneContents',
   async ({ lessonMasterId, languageId }, { rejectWithValue }) => {
@@ -30,9 +21,6 @@ export const fetchSceneContents = createAsyncThunk(
   }
 );
 
-// ---------------------------------------------------------------------------
-// Initial State
-// ---------------------------------------------------------------------------
 const initialState = {
   items: [],
   status: 'idle',
@@ -40,9 +28,6 @@ const initialState = {
   isAdminBlocked: false,
 };
 
-// ---------------------------------------------------------------------------
-// Slice
-// ---------------------------------------------------------------------------
 const sceneContentSlice = createSlice({
   name: 'sceneContent',
   initialState,
@@ -60,7 +45,7 @@ const sceneContentSlice = createSlice({
       })
       .addCase(fetchSceneContents.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.items = action.payload; // Already formatted by backend
+        state.items = action.payload;
       })
       .addCase(fetchSceneContents.rejected, (state, action) => {
         state.status = 'failed';
@@ -74,22 +59,12 @@ const sceneContentSlice = createSlice({
 
 export const { clearSceneContentError } = sceneContentSlice.actions;
 
-// ---------------------------------------------------------------------------
-// Selectors
-// ---------------------------------------------------------------------------
 export const selectSceneContentItems = (state) => state.sceneContent?.items || [];
 export const selectSceneContentStatus = (state) => state.sceneContent?.status || 'idle';
 export const selectSceneContentError = (state) => state.sceneContent?.error || null;
 export const selectSceneContentIsBlocked = (state) =>
   state.sceneContent?.isAdminBlocked || false;
 
-/**
- * Derived selector: get sorted sentences.
- * Backend already filters by lessonMasterId and languageId and formats fields.
- */
-export const selectSentencesForLesson = () => (state) => {
-  return selectSceneContentItems(state) || [];
-};
+export const selectSentencesForLesson = (state) => selectSceneContentItems(state) || [];
 
 export default sceneContentSlice.reducer;
-
