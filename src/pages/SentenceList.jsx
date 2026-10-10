@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 import { useParams, useNavigate } from 'react-router-dom';
+import { fetchMyRewards } from '../redux/slices/rewardSlice';
+import { fetchMyStats } from '../redux/slices/userProgressSlice';
 
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -213,6 +215,7 @@ const SentenceList = () => {
   const [lessonTitle, setLessonTitle] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [sessionRewards, setSessionRewards] = useState({ xpEarned: 0, coinsEarned: 0 });
 
   const progressError = useSelector(selectLessonProgressError);
 
@@ -283,10 +286,21 @@ const SentenceList = () => {
       }));
 
       if (completeScene.fulfilled.match(resultAction)) {
+        const apiRewards = resultAction.payload?.rewards;
+        if (apiRewards) {
+          setSessionRewards({
+            xpEarned: apiRewards.xpEarned || 0,
+            coinsEarned: apiRewards.coinsEarned || 0
+          });
+        }
 
         if (isLast) {
+            try {
+              dispatch(fetchMyRewards());
+              dispatch(fetchMyStats());
+            } catch (e) {}
 
-          try {
+            try {
 
             const pendingTransition = {
 
@@ -696,9 +710,10 @@ const SentenceList = () => {
 
         lessonTitle={displayTitle}
 
-        completedScenes={totalSentences}
-
-        totalScenes={totalSentences}
+        completedSentences={totalSentences}
+        totalSentences={totalSentences}
+        xpEarned={sessionRewards.xpEarned}
+        coinsEarned={sessionRewards.coinsEarned}
 
         onContinue={() => navigate('/adventure-map', { state: { completedLessonMasterId: lessonMasterId } })}
 
@@ -713,3 +728,8 @@ const SentenceList = () => {
 };
 
 export default SentenceList;
+
+
+
+
+

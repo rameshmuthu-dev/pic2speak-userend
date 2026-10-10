@@ -18,8 +18,8 @@ export const useAuth = () => {
           localStorage.setItem('token', response.data.token);
           localStorage.setItem('user', JSON.stringify(response.data.user));
           
-          // Login aanavudan homepage-kku redirect seiya
-          navigate('/'); 
+          // Login aanavudan adventure-map-kku redirect seiya
+          navigate('/adventure-map'); 
         }
       } catch (error) {
         console.error("Login Error:", error);

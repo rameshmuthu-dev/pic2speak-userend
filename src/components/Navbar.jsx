@@ -20,6 +20,35 @@ import AuthModal from './AuthModal';
 import Loading from '../ui/Loading';
 
 /* ─────────────────────────────────────────────────────────────
+   COIN ICON (golden-orange coin with $) - same design as the modal
+   ───────────────────────────────────────────────────────────── */
+
+const CoinIcon = ({ className = 'w-5 h-5', title = 'Coin' }) => (
+  <svg
+    viewBox="0 0 24 24"
+    className={`inline-block shrink-0 ${className}`}
+    role="img"
+    aria-label={title}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <circle cx="12" cy="12" r="11" fill="#F59E0B" stroke="#D97706" strokeWidth="1.5" />
+    <circle cx="12" cy="12" r="8.2" fill="#FBBF24" stroke="#FDE68A" strokeWidth="1" />
+    <path d="M6.2 9.2A6.4 6.4 0 0 1 11 5.7" fill="none" stroke="#FEF3C7" strokeWidth="1.2" strokeLinecap="round" opacity="0.8" />
+    <text
+      x="12"
+      y="16.4"
+      textAnchor="middle"
+      fontSize="12.5"
+      fontWeight="800"
+      fontFamily="Arial, Helvetica, sans-serif"
+      fill="#B45309"
+    >
+      $
+    </text>
+  </svg>
+);
+
+/* ─────────────────────────────────────────────────────────────
    CONFIG
    ───────────────────────────────────────────────────────────── */
 
@@ -45,6 +74,11 @@ const SHELL_CSS = `
   -ms-overflow-style: none;
 }
 .shell-scroll::-webkit-scrollbar { display: none; }
+/* Short desktop screens: tighten the sidebar so all nav links fit in view */
+@media (min-width: 1024px) and (max-height: 760px) {
+  .shell-short-hide { display: none !important; }
+  .shell-short-tight { padding-top: 0.375rem !important; padding-bottom: 0.375rem !important; }
+}
 `;
 
 const MAP_NAV_ITEMS = [
@@ -108,7 +142,7 @@ const LanguageDropdown = ({ languagesList, resolvedLanguage, onSelect, variant =
         <button
           onClick={toggleOpen}
           disabled={!hasLanguages}
-          className={`relative w-full overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-100 via-cyan-100 to-cyan-200 px-3 py-3 text-left shadow-sm transition-shadow duration-300 ${hasLanguages ? 'cursor-pointer hover:shadow-md' : 'opacity-50 cursor-not-allowed'}`}
+          className={`relative w-full overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-100 via-cyan-100 to-cyan-200 shell-short-tight px-3 py-3 text-left shadow-sm transition-shadow duration-300 ${hasLanguages ? 'cursor-pointer hover:shadow-md' : 'opacity-50 cursor-not-allowed'}`}
         >
           <span className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-teal-600 ring-1 ring-teal-200">
@@ -394,8 +428,8 @@ const Navbar = ({ languageSelector = null }) => {
           {/* DESKTOP SIDEBAR */}
           <aside className="hidden lg:flex fixed left-0 top-0 w-72 h-[100dvh] bg-white flex-col border-r border-slate-100 shrink-0 overflow-hidden z-30">
             <div className="p-3.5 flex flex-col h-full gap-2.5 min-h-0">
-              {/* Top Section (scrolls if screen is short, so it never runs under Premium) */}
-              <div className="shell-scroll flex flex-col gap-2.5 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {/* Fixed top: header, profile, stats (never scroll away) */}
+              <div className="flex flex-col gap-2.5 shrink-0">
                 {/* Header */}
                 <div className="flex flex-col gap-2 shrink-0 min-w-0">
                   <div className="flex items-start justify-between gap-2 min-w-0">
@@ -404,7 +438,7 @@ const Navbar = ({ languageSelector = null }) => {
                         <div className="bg-[#14B8A6] w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-sm shrink-0">P2S</div>
                         <span className="text-xl font-bold text-[#0F172A] whitespace-nowrap leading-none">Pic2<span className="text-[#14B8A6]">Speak</span></span>
                       </div>
-                      <p className="text-[11px] text-teal-600 font-semibold whitespace-nowrap leading-tight mt-1">
+                      <p className="shell-short-hide text-[11px] text-teal-600 font-semibold whitespace-nowrap leading-tight mt-1">
                         ✨ One step at a time
                       </p>
                     </div>
@@ -430,7 +464,7 @@ const Navbar = ({ languageSelector = null }) => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-[#0F172A] text-[14px] truncate">{userLoading ? 'Loading...' : profileUser?.name || 'User'}</p>
-                    <p className="text-[10px] text-slate-500 mb-1 truncate leading-tight">Let's learn together!</p>
+                    <p className="shell-short-hide text-[10px] text-slate-500 mb-1 truncate leading-tight">Let's learn together!</p>
                     <div className="flex items-center gap-2">
                       <span className="inline-block text-[9px] font-bold text-white bg-teal-500 rounded-full px-2 py-0.5 shrink-0 shadow-sm">{statsLoading ? '...' : `Level ${progressStats?.level ?? 1}`}</span>
                       <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
@@ -449,7 +483,7 @@ const Navbar = ({ languageSelector = null }) => {
                     <span className="text-[8px] text-slate-400 uppercase tracking-tight font-bold">Streak</span>
                   </div>
                   <div className="bg-slate-50 border border-slate-100 rounded-xl py-1 flex flex-col items-center justify-center shadow-sm">
-                    <span className="text-base leading-none">🪙</span>
+                    <CoinIcon className="w-4 h-4" />
                     <span className="text-xs font-bold text-slate-800 mt-0.5">{totalCoins}</span>
                     <span className="text-[8px] text-slate-400 uppercase tracking-tight font-bold">Coins</span>
                   </div>
@@ -460,21 +494,22 @@ const Navbar = ({ languageSelector = null }) => {
                   </div>
                 </div>
 
-                {/* Navigation */}
-                <nav className="flex flex-col gap-1.5 mt-1 pb-2 shrink-0">
+                </div>
+
+              {/* Navigation (only this area scrolls, between the profile and Go Premium) */}
+              <nav className="shell-scroll flex flex-col gap-1.5 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-1">
                   <button
                     onClick={goToMap}
-                    className="w-full flex items-center gap-3 px-3 py-2 bg-teal-50 text-teal-700 font-bold rounded-xl transition-colors text-[13px] text-left cursor-pointer border-l-4 border-teal-500 shadow-sm"
+                    className="w-full flex items-center gap-3 px-3 py-2 shell-short-tight bg-teal-50 text-teal-700 font-bold rounded-xl transition-colors text-[13px] text-left cursor-pointer border-l-4 border-teal-500 shadow-sm"
                   >
                     <span className="text-base">🗺️</span><span className="truncate">{mapTitle}</span>
                   </button>
                   {SHELL_NAV_ITEMS.map((navItem, i) => (
-                    <button key={i} className="w-full flex items-center gap-3 px-3 py-2 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 hover:text-teal-700 transition-colors text-[13px] text-left cursor-pointer">
+                    <button key={i} className="w-full flex items-center gap-3 px-3 py-2 shell-short-tight text-slate-600 font-semibold rounded-xl hover:bg-slate-50 hover:text-teal-700 transition-colors text-[13px] text-left cursor-pointer">
                       <span className="text-base">{navItem.icon}</span><span>{navItem.label}</span>
                     </button>
                   ))}
                 </nav>
-              </div>
 
               {/* Go Premium Bottom (always separate from the nav, never overlaps) */}
               <div className="pt-2.5 shrink-0 border-t border-slate-100 bg-white">
@@ -601,7 +636,7 @@ const Navbar = ({ languageSelector = null }) => {
                   <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Streak</span>
                 </div>
                 <div className="bg-white border border-slate-100 rounded-[16px] py-3 flex flex-col items-center shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                  <span className="text-2xl mb-0.5">🪙</span>
+                  <CoinIcon className="w-6 h-6 mb-0.5" />
                   <span className="text-[15px] font-black text-[#0F172A]">{totalCoins}</span>
                   <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Coins</span>
                 </div>
