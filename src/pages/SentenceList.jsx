@@ -215,7 +215,12 @@ const SentenceList = () => {
   const [lessonTitle, setLessonTitle] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [sessionRewards, setSessionRewards] = useState({ xpEarned: 0, coinsEarned: 0 });
+  const [sessionRewards, setSessionRewards] = useState({
+    xpEarned: 0,
+    coinsEarned: 0,
+    xpGranted: false,
+    coinsGranted: false,
+  });
 
   const progressError = useSelector(selectLessonProgressError);
 
@@ -290,7 +295,9 @@ const SentenceList = () => {
         if (apiRewards) {
           setSessionRewards({
             xpEarned: apiRewards.xpEarned || 0,
-            coinsEarned: apiRewards.coinsEarned || 0
+            coinsEarned: apiRewards.coinsEarned || 0,
+            xpGranted: apiRewards.xpGranted === true,
+            coinsGranted: apiRewards.coinsGranted === true,
           });
         }
 
@@ -714,6 +721,8 @@ const SentenceList = () => {
         totalSentences={totalSentences}
         xpEarned={sessionRewards.xpEarned}
         coinsEarned={sessionRewards.coinsEarned}
+        xpGranted={sessionRewards.xpGranted}
+        coinsGranted={sessionRewards.coinsGranted}
 
         onContinue={() => navigate('/adventure-map', { state: { completedLessonMasterId: lessonMasterId } })}
 
