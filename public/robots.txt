@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
 
+# Protected app routes
+Disallow: /adventure-map
+Disallow: /sentence-list/
+
 Sitemap: https://pic2speak.vercel.app/sitemap.xml
