@@ -110,6 +110,7 @@ const authSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
+            // Google Login
             .addCase(googleLogin.pending, (state) => {
                 state.isGoogleLoggingIn = true;
                 state.isError = false;
@@ -126,6 +127,7 @@ const authSlice = createSlice({
                 state.isError = true;
                 state.message = action.payload;
             })
+            // OTP Verify
             .addCase(verifyOtp.pending, (state) => {
                 state.isGoogleLoggingIn = true;
                 state.isError = false;
@@ -142,6 +144,7 @@ const authSlice = createSlice({
                 state.isError = true;
                 state.message = action.payload;
             })
+            // Fetch Profile
             .addCase(fetchUserProfile.pending, (state) => {
                 state.isLoading = true;
                 state.isError = false;

@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import AdventureMap from './pages/AdventureMap';
@@ -10,6 +11,8 @@ const SentenceList = lazy(() => import('./pages/SentenceList'));
 
 function App() {
   const location = useLocation();
+  const { isAuthenticated } = useSelector((state) => state.auth);
+
   const isFullscreenPage =
     location.pathname === '/adventure-map' ||
     location.pathname.startsWith('/sentence-list/');
@@ -20,7 +23,10 @@ function App() {
       <main className={isFullscreenPage ? 'grow flex flex-col min-h-0 w-full' : 'container mx-auto px-4 py-6 grow w-full max-w-full overflow-x-hidden'}>
         <Suspense fallback={<div className="text-center py-10 text-xl font-semibold">Loading...</div>}>
           <Routes>
-            <Route path="/" element={<HomePage />} />
+            <Route 
+              path="/" 
+              element={isAuthenticated ? <Navigate to="/adventure-map" replace /> : <HomePage />} 
+            />
             <Route element={<ProtectedRoute />}>
               <Route path="/adventure-map" element={<AdventureMap />} />
               <Route path="/sentence-list/:lessonMasterId" element={<SentenceList />} />
