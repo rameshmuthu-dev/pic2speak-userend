@@ -32,6 +32,7 @@ const characterProgressSlice = createSlice({
   initialState: {
     progress: null,
     loading: false,
+    status: 'idle',
     updating: false,
     error: null,
   },
@@ -46,16 +47,19 @@ const characterProgressSlice = createSlice({
       // fetch
       .addCase(fetchCharacterProgress.pending, (state) => {
         state.loading = true;
+        state.status = 'loading';
         state.error = null;
         // Clear stale previous-language progress immediately to avoid flash
         state.progress = null;
       })
       .addCase(fetchCharacterProgress.fulfilled, (state, action) => {
         state.loading = false;
+        state.status = 'succeeded';
         state.progress = action.payload;
       })
       .addCase(fetchCharacterProgress.rejected, (state, action) => {
         state.loading = false;
+        state.status = 'failed';
         state.error = action.payload;
         // Keep progress null — do not fabricate a position
         state.progress = null;
@@ -80,6 +84,8 @@ export const { clearCharacterProgress } = characterProgressSlice.actions;
 
 export const selectCharacterProgress = (state) => state.characterProgress?.progress || null;
 export const selectCharacterProgressLoading = (state) => state.characterProgress?.loading ?? false;
+export const selectCharacterProgressStatus = (state) => state.characterProgress?.status || 'idle';
+export const selectCharacterProgressError = (state) => state.characterProgress?.error || null;
 export const selectCharacterProgressUpdating = (state) => state.characterProgress?.updating ?? false;
 
 export default characterProgressSlice.reducer;

@@ -19,6 +19,7 @@ export const fetchLessonUnlocks = createAsyncThunk(
 const initialState = {
   unlocks: [],
   loading: false,
+  status: 'idle',
   error: null,
 };
 
@@ -46,15 +47,18 @@ const lessonUnlockSlice = createSlice({
     builder
       .addCase(fetchLessonUnlocks.pending, (state) => {
         state.loading = true;
+        state.status = 'loading';
         state.error = null;
         state.unlocks = [];
       })
       .addCase(fetchLessonUnlocks.fulfilled, (state, action) => {
         state.loading = false;
+        state.status = 'succeeded';
         state.unlocks = action.payload.data || [];
       })
       .addCase(fetchLessonUnlocks.rejected, (state, action) => {
         state.loading = false;
+        state.status = 'failed';
         state.error = action.payload;
         state.unlocks = [];
       });
@@ -82,6 +86,7 @@ export const selectLessonUnlockMap = createSelector(
 );
 
 export const selectLessonUnlockLoading = (state) => state.lessonUnlock?.loading ?? false;
+export const selectLessonUnlockStatus = (state) => state.lessonUnlock?.status || 'idle';
 export const selectLessonUnlockError = (state) => state.lessonUnlock?.error || null;
 
 export default lessonUnlockSlice.reducer;

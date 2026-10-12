@@ -724,7 +724,10 @@ const SentenceList = () => {
         xpGranted={sessionRewards.xpGranted}
         coinsGranted={sessionRewards.coinsGranted}
 
-        onContinue={() => navigate('/adventure-map', { state: { completedLessonMasterId: lessonMasterId } })}
+        onContinue={() => {
+          setIsModalOpen(false);
+          navigate('/adventure-map', { state: { completedLessonMasterId: lessonMasterId } });
+        }}
 
         onClose={() => setIsModalOpen(false)}
 

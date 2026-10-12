@@ -31,7 +31,9 @@ export const useActiveLanguage = () => {
   const setActiveLanguage = useCallback((code) => {
     try {
       localStorage.setItem(STORAGE_KEY, code);
-    } catch {}
+    } catch {
+      // Local storage may be unavailable in restricted browser contexts.
+    }
     setActiveLanguageState(code);
     window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: code }));
   }, []);
@@ -39,25 +41,44 @@ export const useActiveLanguage = () => {
   return [activeLanguage, setActiveLanguage];
 };
 
-export const useLanguageOptions = (enabled = true) => {
-  const [languages, setLanguages] = useState([]);
+const EMPTY_LANGUAGES = [];
+
+export const useLanguageOptionsState = (enabled = true, retryKey = 0) => {
+  const [result, setResult] = useState(null);
 
   useEffect(() => {
-    if (!enabled || languages.length > 0) return undefined;
+    if (!enabled) return undefined;
     let cancelled = false;
-    API.get('/languages')
+    API.get('/languages', { timeout: 30000 })
       .then((res) => {
         if (cancelled) return;
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          // 💡 _id -யையும் சேர்த்து map செய்கிறோம்
-          setLanguages(res.data.data.map((l) => ({ _id: l._id, code: l.code, name: l.name })));
+        if (!res.data?.success || !Array.isArray(res.data.data)) {
+          throw new Error('Unable to load languages.');
         }
+        setResult({ key: retryKey, languages: res.data.data, error: null });
       })
-      .catch(() => {});
+      .catch((requestError) => {
+        if (cancelled) return;
+        setResult({
+          key: retryKey,
+          languages: EMPTY_LANGUAGES,
+          error: requestError.response?.data?.message || requestError.message || 'Unable to load languages.',
+        });
+      });
     return () => {
       cancelled = true;
     };
-  }, [enabled, languages.length]);
+  }, [enabled, retryKey]);
 
+  const currentResult = result?.key === retryKey ? result : null;
+  return {
+    languages: currentResult?.languages || EMPTY_LANGUAGES,
+    status: !enabled ? 'idle' : !currentResult ? 'loading' : currentResult.error ? 'failed' : 'succeeded',
+    error: currentResult?.error || null,
+  };
+};
+
+export const useLanguageOptions = (enabled = true) => {
+  const { languages } = useLanguageOptionsState(enabled);
   return languages;
 };

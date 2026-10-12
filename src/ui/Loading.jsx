@@ -12,7 +12,7 @@ const Loading = ({ message = "Loading...", fullPage = false }) => {
         <div className="absolute top-0 left-0 w-full h-full border-4 border-slate-100 rounded-full"></div>
         {/* Animated Inner Ring */}
         <div className="absolute top-0 left-0 w-full h-full border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
+      </div>  
       
       {/* Pulsing Message */}
       <p className="mt-4 text-slate-600 font-bold tracking-wide animate-pulse uppercase text-xs">

@@ -4,21 +4,32 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { updateCharacterProgress } from '../redux/slices/characterProgressSlice';
 import { setLessonUnlocked, selectLessonUnlockMap } from '../redux/slices/lessonUnlockSlice';
 import { fetchUnlockedLessonAsset } from '../redux/slices/adventureMapSlice';
-import { findNearestPointIndex, buildChainedRoadCurve } from '../utils/roadCurveUtils';
+import { findNearestPointOnPolyline, buildAnchoredRoadCurve } from '../utils/roadCurveUtils';
 import { getOptimizedImageUrl } from '../utils/imageOptimization';
 import { toast } from 'react-toastify';
+
+const prefersReducedMotion = () => (
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+);
 
 const resolveCardLessonMasterId = (card, progressSummary) => {
   const directCandidates = [
     card?.lessonMasterId,
     card?.lessonMaster,
-    card?.lessonId,
     card?.masterId,
   ];
 
   for (const value of directCandidates) {
     const id = typeof value === 'object' ? value?._id : value;
-    if (id) return String(id).trim();
+    if (id && Array.isArray(progressSummary) && progressSummary.some((entry) => {
+      const entryId = typeof entry.lessonMasterId === 'object'
+        ? entry.lessonMasterId?._id
+        : entry.lessonMasterId;
+      return String(entryId || '').trim() === String(id).trim();
+    })) {
+      return String(id).trim();
+    }
   }
 
   if (typeof card?.order === 'number' && Array.isArray(progressSummary)) {
@@ -34,7 +45,8 @@ const resolveCardLessonMasterId = (card, progressSummary) => {
     }
   }
 
-  return null;
+  const fallbackLessonId = typeof card?.lessonId === 'object' ? card.lessonId?._id : card?.lessonId;
+  return fallbackLessonId ? String(fallbackLessonId).trim() : null;
 };
 
 export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, languageMapProgress, progressSummary) => {
@@ -50,6 +62,9 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
 
   const [isTransitionActive, setIsTransitionActive] = useState(false);
   const [targetCardId, setTargetCardId] = useState(null);
+  const [lastTransitionTargetCardId, setLastTransitionTargetCardId] = useState(null);
+  const [transitionTargetPosition, setTransitionTargetPosition] = useState(null);
+  const [transitionCompletedAt, setTransitionCompletedAt] = useState(0);
   const [magicUnlockCardId, setMagicUnlockCardId] = useState(null);
   const magicTimerRef = useRef(null);
 
@@ -121,7 +136,6 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
   }, [location.state]);
 
   useEffect(() => {
-    console.debug('[UserWalking][EFFECT ENTER]');
     if (!characterProgress || !languageMapProgress || !progressSummary || !unlockMap) return;
     if (transitionInFlightRef.current) return;
 
@@ -146,27 +160,15 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
 
     if (!pendingHint || pendingHint !== normCurrent) {
       if (pendingHint && pendingHint !== normCurrent) {
-        console.debug('[UserWalking] stale pending transition — discarding', {
-          pendingHint,
-          normCurrent,
-        });
         pendingNavHintRef.current = null;
         clearPendingTransition();
       }
       return;
     }
 
-    console.debug('[UserWalking] hint captured', pendingHint);
-
     const visibleCards = Array.isArray(languageMapProgress?.visibleCards)
       ? languageMapProgress.visibleCards
       : [];
-
-    console.debug('[UserWalking] waiting for transition data', {
-      visibleCards: visibleCards.length,
-      progressSummary: progressSummary?.length,
-      unlockCount: Object.keys(unlockMap || {}).length,
-    });
 
     if (visibleCards.length === 0) return;
     if (!Array.isArray(progressSummary) || progressSummary.length === 0) return;
@@ -179,31 +181,39 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
 
     if (currentCardIdx === -1 || currentCardIdx >= visibleCards.length - 1) return;
 
-    const targetCard = visibleCards[currentCardIdx + 1];
+    const currentCard = visibleCards[currentCardIdx];
+    const targetCard = visibleCards
+      .filter((card) => Number(card.order) > Number(currentCard.order))
+      .sort((left, right) => Number(left.order) - Number(right.order))
+      .find((card) => {
+        const lessonMasterId = resolveCardLessonMasterId(card, progressSummary);
+        return lessonMasterId && unlockMap[lessonMasterId]?.unlocked === true;
+      });
+
+    if (!targetCard) return;
     const resolvedTargetLmId = resolveCardLessonMasterId(targetCard, progressSummary);
 
     if (!resolvedTargetLmId) return;
 
-    const currentCard = visibleCards[currentCardIdx];
     if (typeof targetCard.order === 'number' && typeof currentCard.order === 'number') {
       if (targetCard.order <= currentCard.order) return;
     }
 
     const targetUnlock = unlockMap[resolvedTargetLmId];
-    if (!targetUnlock) return;
+    if (targetUnlock?.unlocked !== true) return;
 
-    const mainRoad = roadPaths.find(
-      (p) => p.visible !== false && Array.isArray(p.points) && p.points.length >= 2
-    );
-    if (!mainRoad) return;
-
-    const roadPts = [];
-    for (let i = 0; i < mainRoad.points.length; i += 2) {
-      roadPts.push({ x: mainRoad.points[i], y: mainRoad.points[i + 1] });
-    }
+    const roadCandidates = roadPaths
+      .filter((path) => path.visible !== false && Array.isArray(path.points) && path.points.length >= 4)
+      .map((path) => ({
+        path,
+        points: Array.from({ length: path.points.length / 2 }, (_, index) => ({
+          x: path.points[index * 2],
+          y: path.points[index * 2 + 1],
+        })),
+      }));
 
     const getBuildingCenter = (bId) => {
-      const b = mapItems.find((i) => i.type === 'Buildings' && i.id === bId);
+      const b = mapItems.find((i) => i.type === 'Buildings' && String(i.id) === String(bId));
       return b ? { x: b.x + (b.width || 40) / 2, y: b.y + (b.height || 40) / 2 } : null;
     };
 
@@ -212,47 +222,26 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
 
     if (!c1 || !c2) return;
 
-    const startIndex = findNearestPointIndex(roadPts, c1.x, c1.y);
-    const endIndex = findNearestPointIndex(roadPts, c2.x, c2.y);
+    const route = roadCandidates
+      .map(({ path, points }) => {
+        const startAnchor = findNearestPointOnPolyline(points, c1.x, c1.y);
+        const endAnchor = findNearestPointOnPolyline(points, c2.x, c2.y);
+        if (!startAnchor || !endAnchor) return null;
+        return {
+          path,
+          startAnchor,
+          endAnchor,
+          score: startAnchor.distance + endAnchor.distance,
+          curve: buildAnchoredRoadCurve(points, startAnchor, endAnchor),
+        };
+      })
+      .filter((candidate) => candidate?.curve?.length >= 2)
+      .sort((left, right) => left.score - right.score)[0];
 
-    if (startIndex === endIndex) return;
-
-    const curve = buildChainedRoadCurve(roadPts, startIndex, endIndex);
-    if (!curve.length) return;
-
-    if (startIndex > endIndex) curve.reverse();
-
-    console.debug('[UserWalking] transition validated', {
-      currentLessonMasterId: normCurrent,
-      targetLessonMasterId: resolvedTargetLmId,
-    });
+    if (!route) return;
+    const { path: mainRoad, curve } = route;
 
     pendingNavHintRef.current = null;
-
-    console.debug('[UserWalking][ROAD_GEOMETRY]', {
-      currentLessonMasterId: normCurrent,
-      targetLessonMasterId: resolvedTargetLmId,
-      currentCardIdx,
-      currentOrder: currentCard.order,
-      targetOrder: targetCard.order,
-      currentBuildingId: currentCard.buildingId,
-      targetBuildingId: targetCard.buildingId,
-      currentBuildingCenter: c1,
-      targetBuildingCenter: c2,
-      roadPointCount: roadPts.length,
-      startIndex,
-      endIndex,
-      startRoadPoint: roadPts[startIndex],
-      endRoadPoint: roadPts[endIndex],
-      curveLength: curve.length,
-      curveStart: curve[0],
-      curveEnd: curve[curve.length - 1],
-    });
-
-    console.debug('[UserWalking] WALK START', {
-      currentLessonMasterId: normCurrent,
-      targetLessonMasterId: resolvedTargetLmId,
-    });
 
     const capturedLanguageId =
       characterProgress.languageId ||
@@ -266,19 +255,17 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
     for (let i = 1; i < curve.length; i++) {
       dist += Math.hypot(curve[i].x - curve[i - 1].x, curve[i].y - curve[i - 1].y);
     }
-    const duration = Math.max(1.0, dist / 34) * 1000;
-
-    console.debug('[UserWalking][CURVE_DISTANCE]', { debugDistance: dist, duration });
+    const duration = prefersReducedMotion() ? 1 : Math.max(1.0, dist / 34) * 1000;
 
     transitionInFlightRef.current = true;
     setIsTransitionActive(true);
     setTargetCardId(targetCard.id);
+    setLastTransitionTargetCardId(targetCard.id);
+    setTransitionTargetPosition({ ...route.endAnchor, roadId: mainRoad.id });
     setCurrentPos(curve[0]);
     setIsWalking(true);
 
     let start = null;
-    let loggedFirstFrame = false;
-    let lastDebugTime = 0;
 
     const animate = (timestamp) => {
       if (!mountedRef.current) return;
@@ -303,36 +290,17 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
       if (p1.x < p0.x) setFacingLeft(true);
       else if (p1.x > p0.x) setFacingLeft(false);
 
-      if (
-        !loggedFirstFrame ||
-        timestamp - lastDebugTime >= 500 ||
-        progress >= 1
-      ) {
-        console.debug('[UserWalking][RAF_POSITION]', {
-          x,
-          y,
-          progress,
-          curveLength: curve.length,
-          curveStart: curve[0],
-          curveEnd: curve[curve.length - 1],
-        });
-        loggedFirstFrame = true;
-        lastDebugTime = timestamp;
-      }
-
       setCurrentPos({ x, y });
 
       if (progress < 1.0) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
-        console.debug('[UserWalking] ARRIVED');
         setCurrentPos(curve[curve.length - 1]);
         setIsWalking(false);
 
         revealTimerRef.current = setTimeout(() => {
           if (!mountedRef.current) return;
 
-          console.debug('[UserWalking] updating CharacterProgress');
           dispatch(
             updateCharacterProgress({
               languageId: capturedLanguageId,
@@ -340,7 +308,6 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
             })
           ).then((resultAction) => {
             if (updateCharacterProgress.fulfilled.match(resultAction)) {
-              console.debug('[UserWalking] CharacterProgress update fulfilled');
               clearPendingTransition();
               toast.success(`Lesson ${capturedTargetOrder} Unlocked! 🎉`, { icon: '✨' });
 
@@ -352,6 +319,7 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
                 if (!mountedRef.current) return;
                 // Trigger the dedicated magic animation state
                 setMagicUnlockCardId(capturedCardId);
+                setTransitionCompletedAt((value) => value + 1);
                 // Clear the walking transition — the card stays visible via magicUnlockCardId
                 transitionInFlightRef.current = false;
                 setIsTransitionActive(false);
@@ -393,7 +361,6 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
 
     animationFrameRef.current = requestAnimationFrame(animate);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [characterProgress, languageMapProgress, mapItems, roadPaths, unlockMap, dispatch, progressSummary]);
 
   useEffect(() => {
@@ -402,5 +369,16 @@ export const useUserWalkingAnimation = (mapItems, roadPaths, characterProgress, 
     return () => clearInterval(interval);
   }, [isWalking]);
 
-  return { isWalking, isTransitionActive, targetCardId, magicUnlockCardId, currentPos, facingLeft, walkFrameIndex };
+  return {
+    isWalking,
+    isTransitionActive,
+    targetCardId,
+    lastTransitionTargetCardId,
+    transitionTargetPosition,
+    transitionCompletedAt,
+    magicUnlockCardId,
+    currentPos,
+    facingLeft,
+    walkFrameIndex,
+  };
 };

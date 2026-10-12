@@ -8,15 +8,21 @@ import useImage from 'use-image';
 import {
   fetchLessonProgressSummary,
   selectLessonProgressSummary,
+  selectLessonProgressStatus,
+  selectLessonProgressError,
 } from '../redux/slices/lessonProgressSlice';
 import {
   fetchLessonUnlocks,
   selectLessonUnlockMap,
+  selectLessonUnlockStatus,
+  selectLessonUnlockError,
 } from '../redux/slices/lessonUnlockSlice';
 import {
   fetchCharacterProgress,
   selectCharacterProgress,
   selectCharacterProgressLoading,
+  selectCharacterProgressStatus,
+  selectCharacterProgressError,
 } from '../redux/slices/characterProgressSlice';
 import {
   fetchMyStats,
@@ -28,20 +34,76 @@ import {
 import API from '../api/api';
 import { useActiveLanguage } from '../hooks/Useactivelanguage';
 import { useUserWalkingAnimation } from '../hooks/useUserWalkingAnimation';
+import { useProgressCamera } from '../hooks/useProgressCamera';
 import { UserWalkingCharacter } from '../components/UserWalkingCharacter';
 import { UserLockedLocation } from '../components/UserLockedLocation';
 import { getOptimizedImageUrl } from '../utils/imageOptimization';
 import { fetchPublishedMap, fetchUnlockedLessonAsset } from '../redux/slices/adventureMapSlice';
+import { findNearestPointOnPolyline } from '../utils/roadCurveUtils';
+import Loading from '../ui/Loading';
 
 const DESIGN_WIDTH = 800;
 const VIEWPORT_BUFFER = 1000;
+const INITIAL_VIEWPORT_BOUNDS = { top: -VIEWPORT_BUFFER, bottom: 2000 + VIEWPORT_BUFFER };
+const DEFAULT_BG_SECTIONS = [{ id: '1', themeKey: 'rich_grass_green', height: 800, y: 0 }];
 const FALLBACK_CATEGORY_ORDER = ['Buildings', 'Trees', 'Characters', 'Street Lights', 'Waterfalls'];
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+const getRequiredMapAssetUrls = (mapItems, bgSections, customThemes, currentLessonMapImage) => {
+  const urls = new Set();
+  const add = (src, options = {}) => {
+    const optimized = getOptimizedImageUrl(src, options);
+    if (optimized) urls.add(optimized);
+  };
+
+  bgSections.forEach((section) => {
+    add(customThemes[section.themeKey]?.image || '');
+  });
+
+  mapItems.forEach((item) => {
+    const src = item.src || item.imageUrl || '';
+    if (!src) return;
+    add(src, { width: (item.width || 80) * 2 });
+    if (item.type === 'Buildings') add(src, { width: 400 });
+  });
+
+  add(currentLessonMapImage, { width: 400 });
+  return [...urls];
+};
+
+const preloadMapAssets = (urls) => Promise.all(
+  urls.map((url) => new Promise((resolve) => {
+    const image = new window.Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve({ url, loaded: true });
+    image.onerror = () => resolve({ url, loaded: false });
+    image.src = url;
+  }))
+);
+
 const getItemContent = (item, lang) =>
   (item && item.content && item.content[lang]) || { title: '', published: false };
+
+const normalizeId = (value) => {
+  const id = typeof value === 'object' ? value?._id : value;
+  return id ? String(id).trim() : null;
+};
+
+const resolveLessonMasterId = (card, progressSummary) => {
+  const directId = [card?.lessonMasterId, card?.lessonMaster, card?.lessonId, card?.masterId]
+    .map(normalizeId);
+  const summaryIds = new Set((progressSummary || []).map((entry) => normalizeId(entry.lessonMasterId)).filter(Boolean));
+  const knownDirectId = directId.find((id) => summaryIds.has(id));
+  if (knownDirectId) return knownDirectId;
+
+  if (typeof card?.order === 'number' && Array.isArray(progressSummary)) {
+    const record = progressSummary.find((entry) => Number(entry.lessonOrder) === Number(card.order));
+    return normalizeId(record?.lessonMasterId);
+  }
+  return directId.find(Boolean) || null;
+};
 
 const getLanguageMapProgress = (items, lang) => {
   const cards = items
@@ -65,17 +127,13 @@ const getLanguageMapProgress = (items, lang) => {
 };
 
 const resolveCategoryOrder = (categoriesList, mapItems) => {
-  const source =
-    Array.isArray(categoriesList) && categoriesList.length
-      ? categoriesList
-      : (() => {
-          const seen = [...FALLBACK_CATEGORY_ORDER];
-          mapItems.forEach((item) => {
-            const t = item.type || 'Buildings';
-            if (t !== 'Lesson Cards' && t !== 'Roads & Paths' && !seen.includes(t)) seen.push(t);
-          });
-          return seen;
-        })();
+  const source = Array.isArray(categoriesList) && categoriesList.length
+    ? [...categoriesList]
+    : [...FALLBACK_CATEGORY_ORDER];
+  mapItems.forEach((item) => {
+    const type = item.type || 'Buildings';
+    if (type !== 'Roads & Paths' && !source.includes(type)) source.push(type);
+  });
   return [...source.filter((cat) => cat !== 'Roads & Paths'), 'Lesson Cards'].filter(
     (cat, index, all) => all.indexOf(cat) === index
   );
@@ -83,7 +141,6 @@ const resolveCategoryOrder = (categoriesList, mapItems) => {
 
 const MoreLessonsComingSoon = ({ y }) => {
   const width = 420;
-  const height = 240;
   const x = (DESIGN_WIDTH - width) / 2;
 
   const signW = 380;
@@ -497,7 +554,7 @@ const CardMagicBurst = ({ cardWidth, cardHeight, active }) => {
   );
 };
 
-const UserLessonCard = ({ item, slotNumber, activeLanguage, progress, isUnlocked: isUnlockedProp, onNodeClick, revealed = true, magicUnlock = false }) => {
+const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked: isUnlockedProp, onNodeClick, revealed = true, magicUnlock = false }) => {
   const content = getItemContent(item, activeLanguage);
   const cardWidth = item.width || 220;
   const cardHeight = item.height || 90;
@@ -826,9 +883,9 @@ const UserLessonCard = ({ item, slotNumber, activeLanguage, progress, isUnlocked
       </Group>
     </Group>
   );
-};
+});
 
-const UserBackgroundSection = ({ sec, customThemes, stageWidth }) => {
+const UserBackgroundSection = React.memo(({ sec, customThemes, stageWidth }) => {
   const tObj = customThemes[sec.themeKey] || {};
   const [bgImg] = useImage(getOptimizedImageUrl(tObj.image || ''));
   return (
@@ -844,9 +901,9 @@ const UserBackgroundSection = ({ sec, customThemes, stageWidth }) => {
       />
     </Group>
   );
-};
+});
 
-const UserCanvasItem = ({ item, onNodeClick }) => {
+const UserCanvasItem = React.memo(({ item, onNodeClick }) => {
   const [img, status] = useImage(getOptimizedImageUrl(item.src || item.imageUrl || '', { width: (item.width || 80) * 2 }));
   
   if (status === 'failed') {
@@ -866,9 +923,9 @@ const UserCanvasItem = ({ item, onNodeClick }) => {
       ) : null}
     </Group>
   );
-};
+});
 
-const UserRoadPath = ({ path }) => (
+const UserRoadPath = React.memo(({ path }) => (
   <Group listening={false}>
     <Line points={path.points} stroke="#a9825a" strokeWidth={(path.width || 40) + 10}
       lineCap="round" lineJoin="round" tension={0.4} opacity={0.9} listening={false} />
@@ -877,7 +934,7 @@ const UserRoadPath = ({ path }) => (
     <Line points={path.points} stroke="#f6ecd2" strokeWidth={Math.max(4, (path.width || 40) * 0.32)}
       lineCap="round" lineJoin="round" tension={0.4} opacity={0.7} dash={[16, 14]} listening={false} />
   </Group>
-);
+));
 
 const CurrentLessonPanel = ({ currentLessonProgress, currentLessonMasterId, lessonImage, navigate }) => {
   if (!currentLessonProgress || !currentLessonMasterId) {
@@ -1057,11 +1114,21 @@ const WhatsNextPanel = ({ languageMapProgress, currentLessonMasterId }) => {
 const AdventureMap = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { publishedMap: mapData, loading } = useSelector((state) => state.adventureMap);
+  const {
+    publishedMap: mapData,
+    loading: mapLoadingRequest,
+    error: mapError,
+  } = useSelector((state) => state.adventureMap);
   const progressSummary = useSelector(selectLessonProgressSummary);
+  const progressStatus = useSelector(selectLessonProgressStatus);
+  const progressError = useSelector(selectLessonProgressError);
   const lessonUnlockMap = useSelector(selectLessonUnlockMap);
+  const lessonUnlockStatus = useSelector(selectLessonUnlockStatus);
+  const lessonUnlockError = useSelector(selectLessonUnlockError);
   const characterProgress = useSelector(selectCharacterProgress);
   const characterProgressLoading = useSelector(selectCharacterProgressLoading);
+  const characterProgressStatus = useSelector(selectCharacterProgressStatus);
+  const characterProgressError = useSelector(selectCharacterProgressError);
   const progressStats = useSelector(selectUserProgressStats);
 
   // Sidebar / mobile top bar / bottom bar / profile & more sheets now live in Navbar.jsx.
@@ -1130,23 +1197,45 @@ const AdventureMap = () => {
 
   const [containerWidth, setContainerWidth] = useState(DESIGN_WIDTH);
   const [languageDb, setLanguageDb] = useState({});
+  const [languageStatus, setLanguageStatus] = useState('loading');
+  const [languageError, setLanguageError] = useState(null);
+  const [initializationRetryKey, setInitializationRetryKey] = useState(0);
+  const [initializedLanguage, setInitializedLanguage] = useState(null);
+  const [assetState, setAssetState] = useState({ status: 'idle', error: null });
+  const [lessonAssetState, setLessonAssetState] = useState({ key: null, status: 'idle', error: null });
+  const [initializationTimeoutKey, setInitializationTimeoutKey] = useState(null);
+  const [requestedDataKey, setRequestedDataKey] = useState(null);
   const containerRef = useRef(null);
   const mainScrollRef = useRef(null);
   const [revealedCardIds, setRevealedCardIds] = useState(() => new Set());
-  const viewportBoundsRef = useRef({ top: -VIEWPORT_BUFFER, bottom: 2000 + VIEWPORT_BUFFER });
-  const [viewportEpoch, setViewportEpoch] = useState(0);
+  const viewportBoundsRef = useRef(INITIAL_VIEWPORT_BOUNDS);
+  const [viewportBounds, setViewportBounds] = useState(INITIAL_VIEWPORT_BOUNDS);
 
   useEffect(() => {
-    API.get('/languages')
+    let cancelled = false;
+    setLanguageStatus('loading');
+    setLanguageError(null);
+    setLanguageDb({});
+
+    API.get('/languages', { timeout: 30000 })
       .then((res) => {
-        if (res.data.success && Array.isArray(res.data.data)) {
-          const lookup = {};
-          res.data.data.forEach((lang) => { lookup[lang.code] = lang; });
-          setLanguageDb(lookup);
+        if (cancelled) return;
+        if (!res.data.success || !Array.isArray(res.data.data)) {
+          throw new Error('Unable to load languages.');
         }
+        const lookup = {};
+        res.data.data.forEach((lang) => { lookup[lang.code] = lang; });
+        setLanguageDb(lookup);
+        setLanguageStatus('succeeded');
       })
-      .catch(() => {});
-  }, []);
+      .catch((error) => {
+        if (cancelled) return;
+        setLanguageStatus('failed');
+        setLanguageError(error.message || 'Unable to load languages.');
+      });
+
+    return () => { cancelled = true; };
+  }, [initializationRetryKey]);
 
   useEffect(() => {
     if (!mapData) {
@@ -1168,15 +1257,15 @@ const AdventureMap = () => {
     observer.observe(containerRef.current);
     window.addEventListener('resize', updateSize);
     return () => { observer.disconnect(); window.removeEventListener('resize', updateSize); };
-  }, [loading]);
+  }, [mapData, mapLoadingRequest]);
 
-  const defaultThemes = {
+  const defaultThemes = useMemo(() => ({
     rich_grass_green: { color: '#599824', label: 'Rich Grass Green' },
     light_meadow: { color: '#76b041', label: 'Light Meadow' },
     forest_green: { color: '#386623', label: 'Forest Green' },
-  };
+  }), []);
 
-  const bgSections = mapData?.bgSections || [{ id: '1', themeKey: 'rich_grass_green', height: 800, y: 0 }];
+  const bgSections = mapData?.bgSections || DEFAULT_BG_SECTIONS;
   const customThemes = mapData?.customThemes || defaultThemes;
   const EMPTY_ARRAY = useMemo(() => [], []);
   const mapItems = mapData?.mapItems || EMPTY_ARRAY;
@@ -1251,6 +1340,9 @@ const AdventureMap = () => {
     isWalking,
     isTransitionActive,
     targetCardId,
+    lastTransitionTargetCardId,
+    transitionTargetPosition,
+    transitionCompletedAt,
     magicUnlockCardId,
     currentPos,
     facingLeft,
@@ -1260,7 +1352,13 @@ const AdventureMap = () => {
     roadPaths,
     characterProgress,
     languageMapProgress,
-    progressSummary
+    progressSummary,
+  );
+
+  const transitionCardId = normalizeId(targetCardId || lastTransitionTargetCardId);
+  const transitionTargetCard = useMemo(
+    () => mapItems.find((item) => normalizeId(item.id) === transitionCardId) || null,
+    [mapItems, transitionCardId]
   );
 
   const lastVisibleCard = languageMapProgress.visibleCards.length > 0
@@ -1284,34 +1382,39 @@ const AdventureMap = () => {
       )
     : languageMapProgress.visibleHeight;
 
-  if (mapData?.bgSections && mapData.bgSections.length > 0) {
-    mapData.bgSections.forEach(bg => {
-       if (bg.y < visibleMapHeight) {
-          const bgBottom = bg.y + (bg.height || 0);
-          if (bgBottom > visibleMapHeight) {
-             visibleMapHeight = bgBottom;
-          }
-       }
-    });
-  }
+  // Keep the authored map height available even when most lesson cards are
+  // locked or outside the current render window. Viewport filtering reduces
+  // Konva work; it must never make the complete map impossible to scroll.
+  const authoredMapHeight = useMemo(() => Math.max(
+    0,
+    ...bgSections.map((section) => (Number(section.y) || 0) + (Number(section.height) || 0)),
+    ...mapItems.map((item) => (Number(item.y) || 0) + (Number(item.height) || 60)),
+    ...roadPaths.flatMap((path) => (path.points || []).filter((_, index) => index % 2 === 1))
+  ), [bgSections, mapItems, roadPaths]);
+  visibleMapHeight = Math.max(visibleMapHeight, authoredMapHeight);
 
   const hasUnlinkedVisibleCards = languageMapProgress.visibleCards.some((card) => !card.buildingId);
-  const categoryOrder = resolveCategoryOrder(mapData?.categoriesList, mapItems);
+  const categoryOrder = useMemo(
+    () => resolveCategoryOrder(mapData?.categoriesList, mapItems),
+    [mapData?.categoriesList, mapItems]
+  );
 
   useEffect(() => {
-    if (!resolvedLanguage) return;
+    if (languageStatus !== 'succeeded' || !resolvedLanguage) return;
     const langObj = languageDb[resolvedLanguage];
     if (!langObj?._id) return;
     try {
       localStorage.setItem('pic2speak_active_language', resolvedLanguage);
     } catch {
+      // Local storage may be unavailable in restricted browser contexts.
     }
+    setRequestedDataKey(`${resolvedLanguage}:${initializationRetryKey}`);
     dispatch(fetchLessonProgressSummary(langObj._id));
     dispatch(fetchLessonUnlocks(langObj._id));
     dispatch(fetchCharacterProgress(langObj._id));
     dispatch(fetchMyStats());
     dispatch(fetchMyRewards());
-  }, [resolvedLanguage, languageDb, dispatch]);
+  }, [resolvedLanguage, languageDb, languageStatus, initializationRetryKey, dispatch]);
 
 
   const itemsByCategory = useMemo(() => {
@@ -1332,50 +1435,23 @@ const AdventureMap = () => {
   }, [mapItems]);
 
   const characterAnchor = useMemo(() => {
-    if (characterProgressLoading || !characterProgress) return null;
+    if (characterProgressLoading) return null;
 
-    const rawId = characterProgress.currentLessonMasterId;
-    const currentLmId = rawId
-      ? String(typeof rawId === 'object' ? rawId._id : rawId)
-      : null;
-    if (!currentLmId) return null;
+    const currentLmId = normalizeId(characterProgress?.currentLessonMasterId);
+    if (!currentLmId) {
+      if (!characterConfigItem) return null;
+      return {
+        x: (characterConfigItem.x || 0) + (characterConfigItem.width || 40) / 2,
+        y: (characterConfigItem.y || 0) + (characterConfigItem.height || 40) * 0.88,
+      };
+    }
 
     const visibleCards = languageMapProgress?.visibleCards || [];
-    let targetCard = null;
-
-    for (const card of visibleCards) {
-      let resolvedLmId = null;
-
-      const candidates = [card.lessonMasterId, card.lessonMaster, card.lessonId, card.masterId];
-      for (const val of candidates) {
-        if (val) {
-          const id = typeof val === 'object' ? val._id : val;
-          if (id && String(id).trim()) {
-            resolvedLmId = String(id).trim();
-            break;
-          }
-        }
-      }
-
-      if (!resolvedLmId && typeof card.order === 'number' && Array.isArray(progressSummary)) {
-        const match = progressSummary.find(p => p.lessonOrder === card.order);
-        if (match) {
-          const id = typeof match.lessonMasterId === 'object' ? match.lessonMasterId?._id : match.lessonMasterId;
-          if (id) {
-            resolvedLmId = String(id).trim();
-          }
-        }
-      }
-
-      if (resolvedLmId === currentLmId) {
-        targetCard = card;
-        break;
-      }
-    }
+    const targetCard = visibleCards.find((card) => resolveLessonMasterId(card, progressSummary) === currentLmId);
 
     if (!targetCard) return null;
 
-    const building = mapItems.find((i) => i.type === 'Buildings' && i.id === targetCard.buildingId)
+    const building = mapItems.find((i) => i.type === 'Buildings' && String(i.id) === String(targetCard.buildingId))
       || null;
 
     if (!building) return null;
@@ -1386,40 +1462,53 @@ const AdventureMap = () => {
     let nearest = null;
     let nearestDist = Infinity;
     roadPaths.forEach((path) => {
-      if (!path.visible || !Array.isArray(path.points) || path.points.length < 2) return;
-      for (let i = 0; i < path.points.length; i += 2) {
-        const dist = Math.hypot(path.points[i] - cx, path.points[i + 1] - cy);
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearest = { x: path.points[i], y: path.points[i + 1] };
-        }
+      if (path.visible === false || !Array.isArray(path.points) || path.points.length < 4) return;
+      const points = Array.from({ length: path.points.length / 2 }, (_, index) => ({
+        x: path.points[index * 2],
+        y: path.points[index * 2 + 1],
+      }));
+      const candidate = findNearestPointOnPolyline(points, cx, cy);
+      if (candidate && candidate.distance < nearestDist) {
+        nearestDist = candidate.distance;
+        nearest = { x: candidate.x, y: candidate.y, roadId: path.id };
       }
     });
 
     return nearest || { x: cx, y: building.y + (building.height || 40) + 16 };
-  }, [characterProgress, characterProgressLoading, languageMapProgress, mapItems, roadPaths, progressSummary]);
+  }, [characterConfigItem, characterProgress, characterProgressLoading, languageMapProgress, mapItems, roadPaths, progressSummary]);
 
 
 
-  const { top: vpTop, bottom: vpBottom } = viewportBoundsRef.current;
+  const { top: vpTop, bottom: vpBottom } = viewportBounds;
+  const transitionTargetBuildingId = normalizeId(transitionTargetCard?.buildingId);
 
-  const isItemInViewport = (item) => {
-    const itemTop = item.y ?? 0;
-    const itemBottom = itemTop + (item.height || 60);
-    return itemBottom >= vpTop && itemTop <= vpBottom;
-  };
+  const visibleItemsByCategory = useMemo(() => {
+    const groups = {};
+    categoryOrder.forEach((catName) => {
+      groups[catName] = (itemsByCategory[catName] || []).filter((item) => {
+        const isTransitionPriority = normalizeId(item.id) === transitionCardId || normalizeId(item.id) === transitionTargetBuildingId;
+        if (isTransitionPriority) return true;
 
-  const isItemVisible = (item) => {
-    if (item.type === 'Lesson Cards') {
-      return languageMapProgress.visibleCardIds.has(item.id) && isItemInViewport(item);
-    }
-    if (item.type === 'Buildings') {
-      const baseVisible = languageMapProgress.visibleBuildingIds.has(item.id) ||
-        (hasUnlinkedVisibleCards && item.y <= visibleMapHeight);
-      return baseVisible && isItemInViewport(item);
-    }
-    return isItemInViewport(item);
-  };
+        const isCharacterItem = /^characters?$/i.test(String(item.type || '').trim());
+        if (isCharacterItem && characterAnchor) return true;
+
+        const itemTop = item.y ?? 0;
+        const itemBottom = itemTop + (item.height || 60);
+        const inViewport = itemBottom >= vpTop && itemTop <= vpBottom;
+        if (!inViewport) return false;
+
+        if (item.type === 'Lesson Cards') {
+          return languageMapProgress.visibleCardIds.has(item.id);
+        }
+        if (item.type === 'Buildings') {
+          return languageMapProgress.visibleBuildingIds.has(item.id) ||
+            (hasUnlinkedVisibleCards && item.y <= visibleMapHeight);
+        }
+        return true;
+      });
+    });
+    return groups;
+  }, [categoryOrder, characterAnchor, hasUnlinkedVisibleCards, itemsByCategory, languageMapProgress, transitionCardId, transitionTargetBuildingId, visibleMapHeight, vpBottom, vpTop]);
 
   const currentLessonProgress = useMemo(() => {
     if (characterProgressLoading || !characterProgress) return null;
@@ -1440,6 +1529,18 @@ const AdventureMap = () => {
     const rawId = characterProgress.currentLessonMasterId;
     return rawId ? String(typeof rawId === 'object' ? rawId._id : rawId) : null;
   }, [characterProgress, characterProgressLoading]);
+
+  const currentLessonCard = useMemo(
+    () => languageMapProgress.visibleCards.find(
+      (card) => resolveLessonMasterId(card, progressSummary) === currentLessonMasterId
+    ) || null,
+    [currentLessonMasterId, languageMapProgress.visibleCards, progressSummary]
+  );
+
+  const handleLessonCardClick = useCallback((item) => {
+    const lessonMasterId = resolveLessonMasterId(item, progressSummary);
+    if (lessonMasterId) navigate(`/sentence-list/${lessonMasterId}`);
+  }, [navigate, progressSummary]);
 
   const currentLessonMapImage = useMemo(() => {
     if (!currentLessonMasterId || !languageMapProgress.visibleCards) return null;
@@ -1477,7 +1578,7 @@ const AdventureMap = () => {
     if (!lessonCard || !lessonCard.buildingId) return null;
 
     const building = mapItems.find(
-      (item) => item.type === 'Buildings' && item.id === lessonCard.buildingId
+      (item) => item.type === 'Buildings' && String(item.id) === String(lessonCard.buildingId)
     );
 
     if (!building) return null;
@@ -1489,8 +1590,193 @@ const AdventureMap = () => {
   const stageWidth = containerWidth > 0 ? containerWidth : DESIGN_WIDTH;
   const stageHeight = visibleMapHeight * scale;
 
+  const currentLessonIsUnlocked = Boolean(
+    currentLessonCard && (
+      Number(currentLessonCard.order) === 1 ||
+      lessonUnlockMap[currentLessonMasterId]?.unlocked === true
+    )
+  );
+  const currentLessonBuilding = useMemo(
+    () => currentLessonCard?.buildingId
+      ? mapItems.find((item) => item.type === 'Buildings' && String(item.id) === String(currentLessonCard.buildingId)) || null
+      : null,
+    [currentLessonCard, mapItems]
+  );
+  const currentLessonAssetMissing = Boolean(
+    currentLessonBuilding &&
+    currentLessonIsUnlocked &&
+    (currentLessonBuilding.isLocked || !(currentLessonBuilding.src || currentLessonBuilding.imageUrl))
+  );
+
+  const currentDataRequestKey = `${resolvedLanguage || ''}:${initializationRetryKey}`;
+  const mapDataReady = Boolean(mapData) && !mapLoadingRequest;
+  const initializationDataReady = Boolean(
+    mapDataReady &&
+    languageStatus === 'succeeded' &&
+    resolvedLanguage &&
+    progressStatus === 'succeeded' &&
+    lessonUnlockStatus === 'succeeded' &&
+    characterProgressStatus === 'succeeded' &&
+    !characterProgressLoading &&
+    requestedDataKey === currentDataRequestKey
+  );
+
+  const dataValidationError = useMemo(() => {
+    if (languageStatus === 'succeeded' && languagesList.length === 0) {
+      return 'No active languages are available right now.';
+    }
+    if (!initializationDataReady) return null;
+    if (!characterProgress) return 'Your character progress could not be loaded.';
+    if (!currentLessonMasterId) return 'Your current lesson could not be identified.';
+    if (!currentLessonCard) return 'Your current lesson is not available on this map.';
+    if (!currentLessonIsUnlocked) return 'Your current lesson is not unlocked yet.';
+    if (!characterAnchor) return 'Your character could not be placed on the map.';
+    return null;
+  }, [characterAnchor, characterProgress, currentLessonCard, currentLessonIsUnlocked, currentLessonMasterId, initializationDataReady, languageStatus, languagesList.length]);
+
+  const currentLessonAssetKey = `${initializationRetryKey}:${resolvedLanguage || ''}:${currentLessonMasterId || ''}`;
+  const lessonAssetRequestKeyRef = useRef(null);
+
+  useEffect(() => {
+    if (!initializationDataReady || dataValidationError || !currentLessonMasterId) return undefined;
+
+    if (!currentLessonAssetMissing) {
+      setLessonAssetState({ key: currentLessonAssetKey, status: 'succeeded', error: null });
+      return undefined;
+    }
+
+    if (lessonAssetRequestKeyRef.current === currentLessonAssetKey) return undefined;
+    lessonAssetRequestKeyRef.current = currentLessonAssetKey;
+    let cancelled = false;
+    setLessonAssetState({ key: currentLessonAssetKey, status: 'loading', error: null });
+
+    dispatch(fetchUnlockedLessonAsset(currentLessonMasterId))
+      .unwrap()
+      .then((asset) => {
+        if (cancelled) return;
+        if (!asset?.src && !asset?.imageUrl) {
+          throw new Error('The current lesson artwork is unavailable.');
+        }
+        setLessonAssetState({ key: currentLessonAssetKey, status: 'succeeded', error: null });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setLessonAssetState({
+          key: currentLessonAssetKey,
+          status: 'failed',
+          error: error.message || 'The current lesson artwork could not be loaded.',
+        });
+      });
+
+    return () => { cancelled = true; };
+  }, [currentLessonAssetKey, currentLessonAssetMissing, currentLessonMasterId, dataValidationError, dispatch, initializationDataReady]);
+
+  const requiredMapAssetUrls = useMemo(
+    () => getRequiredMapAssetUrls(mapItems, bgSections, customThemes, currentLessonMapImage),
+    [bgSections, customThemes, currentLessonMapImage, mapItems]
+  );
+
+  useEffect(() => {
+    if (!initializationDataReady || dataValidationError) {
+      setAssetState((previous) => previous.status === 'idle' && !previous.error
+        ? previous
+        : { status: 'idle', error: null });
+      return undefined;
+    }
+
+    let cancelled = false;
+    setAssetState({ status: 'loading', error: null });
+
+    preloadMapAssets(requiredMapAssetUrls).then((results) => {
+      if (cancelled) return;
+      const failedCount = results.filter((result) => !result.loaded).length;
+      if (failedCount > 0) {
+        setAssetState({
+          status: 'failed',
+          error: 'Some map artwork could not be loaded. Please try again.',
+        });
+      } else {
+        setAssetState({ status: 'succeeded', error: null });
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [dataValidationError, initializationDataReady, requiredMapAssetUrls]);
+
+  const initializationKey = `${initializationRetryKey}:${resolvedLanguage || ''}`;
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setInitializationTimeoutKey(initializationKey);
+    }, 30000);
+    return () => window.clearTimeout(timeoutId);
+  }, [initializationKey]);
+
+  const initializationTimeoutError = initializationTimeoutKey === initializationKey
+    ? 'The adventure map is taking too long to load. Please try again.'
+    : null;
+  const {
+    initialCameraApplied,
+    initialCameraError,
+  } = useProgressCamera({
+    scrollRef: mainScrollRef,
+    scale,
+    mapReady: initializationDataReady && !dataValidationError && stageHeight > 0,
+    cameraReady: initializationDataReady && !dataValidationError && Boolean(characterAnchor),
+    currentAnchor: characterAnchor,
+    currentLessonCard,
+    transitionActive: isTransitionActive,
+    transitionPosition: currentPos,
+    transitionTargetPosition,
+    transitionTargetCard,
+    transitionCompletedAt,
+    initializationKey,
+  });
+
+  const initializationError = mapError
+    || (languageStatus === 'failed' ? languageError : null)
+    || (progressStatus === 'failed' ? progressError : null)
+    || (lessonUnlockStatus === 'failed' ? lessonUnlockError : null)
+    || (characterProgressStatus === 'failed' ? characterProgressError : null)
+    || dataValidationError
+    || assetState.error
+    || (lessonAssetState.key === currentLessonAssetKey ? lessonAssetState.error : null)
+    || initializationTimeoutError
+    || initialCameraError;
+
+  const initialMapReady = Boolean(
+    initializationDataReady &&
+    !initializationError &&
+    assetState.status === 'succeeded' &&
+    !currentLessonAssetMissing &&
+    lessonAssetState.key === currentLessonAssetKey &&
+    lessonAssetState.status === 'succeeded' &&
+    initialCameraApplied
+  );
+
+  useEffect(() => {
+    if (initialMapReady && resolvedLanguage) {
+      setInitializedLanguage(resolvedLanguage);
+    }
+  }, [initialMapReady, resolvedLanguage]);
+
+  const isMapInitialized = Boolean(resolvedLanguage && initializedLanguage === resolvedLanguage);
+  const mapViewportError = !isMapInitialized ? initializationError : null;
+  const mapViewportLoading = !isMapInitialized && !mapViewportError;
+
+  const handleRetryInitialization = useCallback(() => {
+    setRequestedDataKey(null);
+    setInitializedLanguage(null);
+    setAssetState({ status: 'idle', error: null });
+    setLessonAssetState({ key: null, status: 'idle', error: null });
+    setInitializationTimeoutKey(null);
+    setLanguageDb({});
+    setLanguageStatus('loading');
+    setLanguageError(null);
+    setInitializationRetryKey((value) => value + 1);
+    dispatch(fetchPublishedMap());
+  }, [dispatch]);
+
   const checkCardVisibility = useCallback(() => {
-    if (REDUCED_MOTION) return;
     const mainEl = mainScrollRef.current;
     const stageEl = containerRef.current;
     if (!mainEl || !stageEl) return;
@@ -1518,15 +1804,14 @@ const AdventureMap = () => {
     const newMapBottom = visibleBottom / scale + VIEWPORT_BUFFER;
     const prevBounds = viewportBoundsRef.current;
     
-    if (Math.abs(prevBounds.top - newMapTop) > 200 || Math.abs(prevBounds.bottom - newMapBottom) > 200) {
+    if (Math.abs(prevBounds.top - newMapTop) > 120 || Math.abs(prevBounds.bottom - newMapBottom) > 120) {
       viewportBoundsRef.current = { top: newMapTop, bottom: newMapBottom };
-      setViewportEpoch(e => e + 1);
+      setViewportBounds(viewportBoundsRef.current);
     }
 
   }, [languageMapProgress, scale]);
 
   useEffect(() => {
-    if (REDUCED_MOTION) return undefined;
     const mainEl = mainScrollRef.current;
     if (!mainEl) return undefined;
 
@@ -1554,6 +1839,15 @@ const AdventureMap = () => {
     ? customThemes[bgSections[bgSections.length - 1].themeKey]
     : null;
   const fallbackBgColor = lastSectionTheme?.color || '#599824';
+  const renderWindowTopPx = Math.max(0, Math.min(stageHeight, vpTop * scale));
+  const renderWindowBottomPx = Math.max(
+    renderWindowTopPx + 1,
+    Math.min(stageHeight, vpBottom * scale)
+  );
+  const renderStageHeight = Math.max(1, renderWindowBottomPx - renderWindowTopPx);
+  const mapViewportHeight = stageHeight > 0
+    ? stageHeight
+    : 'calc(100dvh - var(--shell-top-h, 0px) - var(--shell-bottom-h, 0px))';
 
   return (
     // Height on mobile = viewport minus the fixed top bar & bottom bar (CSS vars set by Navbar).
@@ -1565,13 +1859,33 @@ const AdventureMap = () => {
       >
         <div className="flex-1 w-full px-0 pb-6 flex flex-col items-center">
           <div ref={containerRef} className="w-full max-w-[800px] relative flex justify-center">
-            <div className="w-full overflow-hidden">
-              {loading ? (
-                <div className="flex h-96 items-center justify-center text-white font-bold">Loading Adventure Map...</div>
+            <div className="w-full relative overflow-hidden" style={{ height: mapViewportHeight, minHeight: mapViewportHeight }}>
+              {mapViewportError ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-slate-50 px-6 text-center">
+                  <p className="max-w-md text-sm font-semibold text-slate-700">
+                    {mapViewportError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRetryInitialization}
+                    className="rounded-full bg-teal-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-teal-700"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : mapViewportLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
+                  <Loading message="Preparing your adventure..." />
+                </div>
               ) : visibleMapHeight > 0 ? (
-                <Stage width={stageWidth} height={stageHeight} listening={true}>
-                  <Layer name="background-layer" listening={false}>
-                    <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill={fallbackBgColor} listening={false} />
+                <Stage
+                  width={stageWidth}
+                  height={renderStageHeight}
+                  listening={true}
+                  style={{ position: 'absolute', top: renderWindowTopPx, left: 0 }}
+                >
+                  <Layer y={-renderWindowTopPx} name="background-layer" listening={false}>
+                    <Rect x={0} y={0} width={stageWidth} height={renderStageHeight} fill={fallbackBgColor} listening={false} />
                     <Group scaleX={scale} scaleY={scale} listening={false}>
                       {bgSections
                         .filter(sec => {
@@ -1584,10 +1898,13 @@ const AdventureMap = () => {
                     </Group>
                   </Layer>
 
-                  <Layer name="roads-layer" listening={false}>
+                  <Layer y={-renderWindowTopPx} name="roads-layer" listening={false}>
                     <Group scaleX={scale} scaleY={scale} listening={false}>
                       {roadPaths.map((path) => {
                         if (!path.visible || path.points.length < 2) return null;
+                        if (isTransitionActive && path.id === transitionTargetPosition?.roadId) {
+                          return <UserRoadPath key={path.id} path={path} />;
+                        }
                         let minY = Infinity, maxY = -Infinity;
                         for (let i = 1; i < path.points.length; i += 2) {
                           if (path.points[i] < minY) minY = path.points[i];
@@ -1599,7 +1916,7 @@ const AdventureMap = () => {
                     </Group>
                   </Layer>
 
-                  <Layer name="end-mask-layer" listening={false}>
+                  <Layer y={-renderWindowTopPx} name="end-mask-layer" listening={false}>
                     <Group scaleX={scale} scaleY={scale} listening={false}>
                       {lastVisibleCard && (
                         <Rect
@@ -1614,31 +1931,27 @@ const AdventureMap = () => {
                     </Group>
                   </Layer>
 
-                  <Layer name="objects-layer">
+                  <Layer y={-renderWindowTopPx} name="objects-layer">
                     <Group scaleX={scale} scaleY={scale}>
                       {categoryOrder.map((catName) => {
-                        const allCatItems = itemsByCategory[catName] || [];
-                        const catItems = allCatItems.filter(isItemVisible);
+                        const catItems = visibleItemsByCategory[catName] || [];
                         return (
                           <Group key={catName} name={`group-${catName}`} listening={catName === 'Lesson Cards'}>
                             {catItems
                               .filter((item) => item.type !== 'Lesson Cards')
-                              .map((item, idx) => {
+                              .map((item) => {
                                 const normalizedCat = String(catName).trim().toLowerCase();
                                 const isCharacter = normalizedCat === 'character' || normalizedCat === 'characters';
                                 if (isCharacter && (characterProgressLoading || isTransitionActive)) return null;
                                 const renderItem =
                                   isCharacter && characterAnchor
                                     ? { ...item, x: characterAnchor.x - (item.width || 40) / 2, y: characterAnchor.y - (item.height || 40) * 0.88 }
-                                    : isCharacter && !characterAnchor
-                                      ? null
-                                      : item;
+                                    : item;
                                 if (renderItem === null) return null;
 
                                 let finalIsLocked = renderItem.isLocked;
                                 if (isTransitionActive && targetCardId && renderItem.id) {
-                                  const targetCard = mapItems.find(i => i.id === targetCardId);
-                                  if (targetCard && targetCard.buildingId === renderItem.id) {
+                                  if (transitionTargetBuildingId === normalizeId(renderItem.id)) {
                                     finalIsLocked = true;
                                   }
                                 }
@@ -1659,36 +1972,14 @@ const AdventureMap = () => {
                                 );
                               })}
                             {catName === 'Lesson Cards' &&
-                              catItems.map((item, index) => {
-                                  let finalLmId = null;
-                                  const candidates = [item.lessonMasterId, item.lessonMaster, item.lessonId, item.masterId];
-                                  for (const val of candidates) {
-                                    if (val) {
-                                      const extracted = typeof val === 'object' ? val._id : val;
-                                      if (extracted && String(extracted).trim()) {
-                                        finalLmId = String(extracted).trim();
-                                        break;
-                                      }
-                                    }
-                                  }
-
-                                  if (!finalLmId && typeof item.order === 'number' && item.order > 0) {
-                                    finalLmId = lmIdByOrder[item.order] || null;
-                                  }
-
-                                  if (process.env.NODE_ENV !== 'production') {
-                                    console.debug('[AdventureMap][LessonCard] id resolution', {
-                                      itemId: item.id,
-                                      itemOrder: item.order,
-                                      directCandidates: candidates.map(v => v ? String(typeof v === 'object' ? v._id : v) : null),
-                                      finalLmId,
-                                    });
-                                  }
+                              catItems.map((item) => {
+                                const finalLmId = resolveLessonMasterId(item, progressSummary)
+                                  || (typeof item.order === 'number' && item.order > 0 ? lmIdByOrder[item.order] : null);
 
                                   const progress = finalLmId ? progressByLessonMasterId[finalLmId] : undefined;
                                   const unlockState = finalLmId ? lessonUnlockMap[finalLmId] : null;
 
-                                  const isBeingUnlocked = isTransitionActive && item.id === targetCardId;
+                                   const isBeingUnlocked = isTransitionActive && normalizeId(item.id) === normalizeId(targetCardId);
                                   const isOrder1 = item.order === 1;
                                   const isUnlocked = isOrder1
                                     ? true
@@ -1696,9 +1987,9 @@ const AdventureMap = () => {
 
                                   // Keep the card visible while the magic animation is playing on it,
                                   // even if unlockState hasn't propagated yet.
-                                  const isMagicTarget = item.id === magicUnlockCardId;
+                                   const isMagicTarget = normalizeId(item.id) === normalizeId(magicUnlockCardId);
 
-                                  if (!isUnlocked && !isOrder1 && !isMagicTarget) {
+                                  if (!isUnlocked && !isOrder1 && !isBeingUnlocked && !isMagicTarget) {
                                     return null;
                                   }
 
@@ -1706,22 +1997,12 @@ const AdventureMap = () => {
                                     <UserLessonCard
                                       key={item.id}
                                       item={item}
-                                      slotNumber={item.order || index + 1}
                                       activeLanguage={resolvedLanguage}
                                       progress={progress}
                                       isUnlocked={isUnlocked || isMagicTarget}
-                                      revealed={REDUCED_MOTION ? true : revealedCardIds.has(item.id)}
+                                      revealed={REDUCED_MOTION || isBeingUnlocked || isMagicTarget || revealedCardIds.has(item.id)}
                                       magicUnlock={isMagicTarget}
-                                      onNodeClick={() => {
-                                        if (finalLmId) {
-                                          console.debug('[AdventureMap][LessonClick] navigating', {
-                                            itemId: item.id,
-                                            itemOrder: item.order,
-                                            finalLmId,
-                                          });
-                                          navigate(`/sentence-list/${finalLmId}`);
-                                        }
-                                      }}
+                                      onNodeClick={handleLessonCardClick}
                                     />
                                   );
                               })}
@@ -1756,7 +2037,7 @@ const AdventureMap = () => {
 
       <aside className="hidden xl:flex w-80 h-full bg-slate-100 border-l border-slate-200 flex-col overflow-hidden shrink-0 z-20">
         <div className="flex-1 overflow-hidden flex flex-col gap-2.5 p-3">
-          {characterProgressLoading ? (
+          {characterProgressLoading || mapViewportLoading ? (
             <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 p-3 text-center shrink-0">
               <p className="text-xs text-slate-500">Loading lesson...</p>
             </div>

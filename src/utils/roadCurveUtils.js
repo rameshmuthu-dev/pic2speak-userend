@@ -39,6 +39,62 @@ export const findNearestPointIndex = (points, x, y, minIndex = 0) => {
   return bestIdx;
 };
 
+// Returns the closest point on the complete polyline, not just the closest
+// authored vertex. This keeps character destinations beside buildings even
+// when a building sits between two road points.
+export const findNearestPointOnPolyline = (points, x, y) => {
+  if (!Array.isArray(points) || points.length === 0) return null;
+  if (points.length === 1) {
+    return { ...points[0], segmentIndex: 0, distance: Math.hypot(points[0].x - x, points[0].y - y) };
+  }
+
+  let nearest = null;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const start = points[index];
+    const end = points[index + 1];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const ratio = lengthSquared === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((x - start.x) * dx + (y - start.y) * dy) / lengthSquared));
+    const point = { x: start.x + dx * ratio, y: start.y + dy * ratio };
+    const distance = Math.hypot(point.x - x, point.y - y);
+    if (!nearest || distance < nearest.distance) {
+      nearest = { ...point, segmentIndex: index, ratio, distance };
+    }
+  }
+  return nearest;
+};
+
+export const buildAnchoredRoadCurve = (points, startAnchor, endAnchor) => {
+  if (!startAnchor || !endAnchor) return [];
+
+  const waypoints = [startAnchor];
+  if (startAnchor.segmentIndex <= endAnchor.segmentIndex) {
+    for (let index = startAnchor.segmentIndex + 1; index <= endAnchor.segmentIndex; index += 1) {
+      waypoints.push(points[index]);
+    }
+  } else {
+    for (let index = startAnchor.segmentIndex; index >= endAnchor.segmentIndex + 1; index -= 1) {
+      waypoints.push(points[index]);
+    }
+  }
+  waypoints.push(endAnchor);
+
+  const compactWaypoints = waypoints.filter((point, index, all) => (
+    index === 0 || Math.hypot(point.x - all[index - 1].x, point.y - all[index - 1].y) > 0.01
+  ));
+  if (compactWaypoints.length < 2) return [startAnchor, endAnchor];
+
+  const curve = buildChainedRoadCurve(compactWaypoints, 0, compactWaypoints.length - 1);
+  if (curve.length > 0) {
+    curve[0] = { x: startAnchor.x, y: startAnchor.y };
+    curve[curve.length - 1] = { x: endAnchor.x, y: endAnchor.y };
+  }
+  return curve;
+};
+
 export const buildChainedRoadCurve = (points, fromIndex, toIndex) => {
   if (!points || points.length < 2 || fromIndex === toIndex) {
     const single = points?.[toIndex] ?? points?.[fromIndex];

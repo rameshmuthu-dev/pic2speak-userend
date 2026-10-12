@@ -18,6 +18,10 @@ export const UserWalkingCharacter = ({ characterConfig, isWalking, isTransitionA
       lastLoadedImgRef.current = img;
     }
   }, [img]);
+  // Keeping the last decoded frame avoids a blank character while the next
+  // walking frame is being decoded. The ref is intentionally read only for
+  // this visual fallback and never drives application state.
+  // eslint-disable-next-line react-hooks/refs
   const displayImg = img || lastLoadedImgRef.current;
 
   const [bobOffset, setBobOffset] = useState(0);
@@ -46,25 +50,7 @@ export const UserWalkingCharacter = ({ characterConfig, isWalking, isTransitionA
   const renderX = currentPos ? currentPos.x - w / 2 : 0;
   const renderY = currentPos ? currentPos.y - h * 0.88 + bobOffset : 0;
 
-  const lastDebugPos = useRef(null);
-  useEffect(() => {
-    if (!currentPos) return;
-    const { x, y } = currentPos;
-    const lx = lastDebugPos.current?.x || 0;
-    const ly = lastDebugPos.current?.y || 0;
-
-    if (!lastDebugPos.current || Math.hypot(x - lx, y - ly) >= 20) {
-      console.debug('[UserWalkingCharacter][POSITION]', {
-        isWalking,
-        isTransitionActive,
-        currentPos,
-        renderX,
-        renderY,
-      });
-      lastDebugPos.current = currentPos;
-    }
-  }, [currentPos, isWalking, isTransitionActive, renderX, renderY]);
-
+  // eslint-disable-next-line react-hooks/refs
   if (!isTransitionActive || !currentPos || !displayImg) return null;
 
   return (
