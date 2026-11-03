@@ -98,9 +98,16 @@ const lessonProgressSlice = createSlice({
         state.error = action.payload;
       })
       // getProgress
-      .addCase(getLessonProgress.pending, (state) => {
+      .addCase(getLessonProgress.pending, (state, action) => {
         state.actionStatus = 'loading';
         state.error = null;
+        if (
+          state.currentProgress &&
+          (String(state.currentProgress.lessonMasterId?._id || state.currentProgress.lessonMasterId) !== String(action.meta.arg.lessonMasterId) ||
+           String(state.currentProgress.languageId?._id || state.currentProgress.languageId) !== String(action.meta.arg.languageId))
+        ) {
+          state.currentProgress = null;
+        }
       })
       .addCase(getLessonProgress.fulfilled, (state, action) => {
         state.actionStatus = 'succeeded';
@@ -111,9 +118,16 @@ const lessonProgressSlice = createSlice({
         state.error = action.payload;
       })
       // startLesson
-      .addCase(startLesson.pending, (state) => {
+      .addCase(startLesson.pending, (state, action) => {
         state.actionStatus = 'loading';
         state.error = null;
+        if (
+          state.currentProgress &&
+          (String(state.currentProgress.lessonMasterId?._id || state.currentProgress.lessonMasterId) !== String(action.meta.arg.lessonMasterId) ||
+           String(state.currentProgress.languageId?._id || state.currentProgress.languageId) !== String(action.meta.arg.languageId))
+        ) {
+          state.currentProgress = null;
+        }
       })
       .addCase(startLesson.fulfilled, (state, action) => {
         state.actionStatus = 'succeeded';
