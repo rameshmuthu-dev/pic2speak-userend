@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -41,15 +41,207 @@ import { getOptimizedImageUrl } from '../utils/imageOptimization';
 import { fetchPublishedMap, fetchUnlockedLessonAsset } from '../redux/slices/adventureMapSlice';
 import { findNearestPointOnPolyline } from '../utils/roadCurveUtils';
 import Loading from '../ui/Loading';
+import {
+  getResponsiveLayoutMetrics,
+  projectWorldXToScreen,
+  projectRoadPointsToScreen,
+  DEFAULT_CARD_WIDTH,
+  DEFAULT_CARD_HEIGHT,
+  DEFAULT_ROAD_WIDTH
+} from '../utils/mapProjection';
 
-const DESIGN_WIDTH = 800;
 const VIEWPORT_BUFFER = 1000;
 const INITIAL_VIEWPORT_BOUNDS = { top: -VIEWPORT_BUFFER, bottom: 2000 + VIEWPORT_BUFFER };
-const DEFAULT_BG_SECTIONS = [{ id: '1', themeKey: 'rich_grass_green', height: 800, y: 0 }];
+const DEFAULT_BG_SECTIONS = [{ id: '1', themeKey: 'deep_navy', height: 800, y: 0 }];
 const FALLBACK_CATEGORY_ORDER = ['Buildings', 'Trees', 'Characters', 'Street Lights', 'Waterfalls'];
+const WORLD_WIDTH = 800;
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+const CARD_MIN_W = 154;
+const CARD_MAX_W = 280;
+const CARD_MIN_H = 72;
+const CARD_PAD_X = 14;
+const CARD_PAD_Y = 12;
+const CARD_GAP = 10;
+const RING_R = 21;
+const RING_D = 46;
+const TITLE_FONT = 14;
+const TITLE_LINE_H = 1.2;
+const SUB_FONT = 11;
+const SUB_GAP = 3;
+const ACTION_H = 28;
+const ACTION_GAP = 8;
+const CARD_FONT_FAMILY = 'Fredoka, sans-serif';
+
+const STARTED_COUNT_KEYS = [
+  'startedScenes',
+  'inProgressScenes',
+  'attemptedScenes',
+  'startedSentences',
+  'attemptedSentences',
+  'inProgressSentences',
+];
+const STARTED_ID_KEYS = [
+  'currentSceneId',
+  'currentSentenceId',
+  'lastSceneId',
+  'lastSentenceId',
+  'lastAttemptedSceneId',
+  'lastAttemptedSentenceId',
+  'resumeSceneId',
+  'resumeSentenceId',
+];
+const STARTED_DATE_KEYS = ['startedAt', 'lastAttemptedAt', 'lastActivityAt', 'lastAccessedAt'];
+const STARTED_STATUSES = ['in_progress', 'in-progress', 'inprogress', 'started', 'active', 'ongoing'];
+const NOT_STARTED_STATUSES = ['', 'not_started', 'not-started', 'notstarted', 'locked', 'pending', 'new'];
+const SENTENCE_LIST_KEYS = ['scenes', 'sentences', 'sceneProgress', 'sentenceProgress'];
+
+const normalizeStatus = (value) => String(value || '').trim().toLowerCase();
+
+const isLessonCompleted = (progress) => normalizeStatus(progress?.status) === 'completed';
+
+const hasStartedLesson = (progress) => {
+  if (!progress) return false;
+
+  if (Number(progress.completedScenes) > 0) return true;
+  if (STARTED_COUNT_KEYS.some((key) => Number(progress[key]) > 0)) return true;
+  if (STARTED_ID_KEYS.some((key) => Boolean(progress[key]))) return true;
+  if (STARTED_DATE_KEYS.some((key) => Boolean(progress[key]))) return true;
+  if (STARTED_STATUSES.includes(normalizeStatus(progress.status))) return true;
+
+  return SENTENCE_LIST_KEYS.some((key) => {
+    const list = progress[key];
+    if (!Array.isArray(list)) return false;
+    return list.some((entry) => {
+      if (!entry) return false;
+      if (entry.completed === true || entry.isCompleted === true) return true;
+      if (Number(entry.attempts) > 0 || Number(entry.attemptCount) > 0) return true;
+      return !NOT_STARTED_STATUSES.includes(normalizeStatus(entry.status));
+    });
+  });
+};
+
+const getLessonActionState = (progress) => {
+  if (isLessonCompleted(progress)) return 'review';
+  return hasStartedLesson(progress) ? 'continue' : 'start';
+};
+
+const ACTION_LABELS = {
+  start: 'Start',
+  continue: 'Continue',
+  review: 'Review',
+};
+
+const ACTION_COLORS = {
+  start: ['#2dd4bf', '#14b8a6'],
+  continue: ['#38bdf8', '#0ea5e9'],
+  review: ['#818cf8', '#6366f1'],
+};
+
+let measureContext = null;
+
+const getMeasureContext = () => {
+  if (!measureContext && typeof document !== 'undefined') {
+    measureContext = document.createElement('canvas').getContext('2d');
+  }
+  return measureContext;
+};
+
+const measureTextWidth = (text, fontSize, bold = true) => {
+  const ctx = getMeasureContext();
+  if (!ctx) return String(text).length * fontSize * 0.6;
+  ctx.font = `${bold ? 'bold ' : ''}${fontSize}px ${CARD_FONT_FAMILY}`;
+  return ctx.measureText(text).width;
+};
+
+const layoutTitleLines = (words, fontSize, maxWidth) => {
+  const measure = (text) => measureTextWidth(text, fontSize, true);
+
+  const greedy = (limit) => {
+    const lines = [];
+    let current = '';
+    words.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (!current || measure(next) <= limit) {
+        current = next;
+      } else {
+        lines.push(current);
+        current = word;
+      }
+    });
+    if (current) lines.push(current);
+    return lines;
+  };
+
+  let lines = greedy(maxWidth);
+
+  if (lines.length > 1) {
+    const targetCount = lines.length;
+    let low = Math.max(...words.map(measure));
+    let high = maxWidth;
+    if (low < high) {
+      for (let i = 0; i < 14; i += 1) {
+        const mid = (low + high) / 2;
+        if (greedy(mid).length <= targetCount) high = mid;
+        else low = mid;
+      }
+      lines = greedy(high);
+    }
+  }
+
+  const textWidth = lines.length ? Math.max(...lines.map(measure)) : 0;
+  return { lines, textWidth };
+};
+
+const buildCardLayout = (titleText, subtitle, hasAction) => {
+  const words = String(titleText || '').split(/\s+/).filter(Boolean);
+  const textBudget = CARD_MAX_W - CARD_PAD_X * 2 - CARD_GAP - RING_D;
+  const { lines, textWidth } = layoutTitleLines(words, TITLE_FONT, textBudget);
+
+  const subtitleWidth = subtitle ? measureTextWidth(subtitle, SUB_FONT, false) : 0;
+  const contentTextWidth = Math.max(textWidth, subtitleWidth);
+  const rawWidth = Math.ceil(contentTextWidth) + CARD_PAD_X * 2 + CARD_GAP + RING_D;
+  const cardWidth = Math.min(CARD_MAX_W, Math.max(CARD_MIN_W, rawWidth));
+  const titleAreaWidth = cardWidth - CARD_PAD_X * 2 - CARD_GAP - RING_D;
+
+  const titleBlockHeight =
+    lines.length * TITLE_FONT * TITLE_LINE_H + (subtitle ? SUB_GAP + SUB_FONT * 1.2 : 0);
+  const contentHeight = Math.max(titleBlockHeight, RING_D);
+  const cardHeight = Math.max(
+    CARD_MIN_H,
+    CARD_PAD_Y * 2 + contentHeight + (hasAction ? ACTION_GAP + ACTION_H : 0)
+  );
+
+  return {
+    lines,
+    cardWidth,
+    cardHeight,
+    titleAreaWidth,
+    titleBlockHeight,
+    contentHeight,
+  };
+};
+
+const useFontsReady = () => {
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    if (typeof document === 'undefined' || !document.fonts) return undefined;
+    Promise.all([
+      document.fonts.load(`bold ${TITLE_FONT}px Fredoka`),
+      document.fonts.load(`${SUB_FONT}px Fredoka`),
+    ])
+      .catch(() => null)
+      .then(() => document.fonts.ready)
+      .then(() => {
+        if (!cancelled) setVersion(1);
+      });
+    return () => { cancelled = true; };
+  }, []);
+  return version;
+};
 
 const getRequiredMapAssetUrls = (mapItems, bgSections, customThemes, currentLessonMapImage) => {
   const urls = new Set();
@@ -139,9 +331,9 @@ const resolveCategoryOrder = (categoriesList, mapItems) => {
   );
 };
 
-const MoreLessonsComingSoon = ({ y }) => {
+const MoreLessonsComingSoon = ({ y, worldWidth = 800 }) => {
   const width = 420;
-  const x = (DESIGN_WIDTH - width) / 2;
+  const x = Math.max(0, (worldWidth - width) / 2);
 
   const signW = 380;
   const signH = 100;
@@ -556,9 +748,30 @@ const CardMagicBurst = ({ cardWidth, cardHeight, active }) => {
 
 const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked: isUnlockedProp, onNodeClick, revealed = true, magicUnlock = false }) => {
   const content = getItemContent(item, activeLanguage);
-  const cardWidth = item.width || 220;
-  const cardHeight = item.height || 90;
+  const isUnlocked = Boolean(isUnlockedProp);
   const [isHovered, setIsHovered] = useState(false);
+  const fontsVersion = useFontsReady();
+
+  const titleText = content.title ? content.title.toUpperCase() : 'UNTITLED';
+  const lessonNumber = progress?.lessonOrder ?? item.order;
+  const subtitle = lessonNumber != null && lessonNumber !== '' ? `Lesson ${lessonNumber}` : '';
+
+  const layout = useMemo(
+    () => buildCardLayout(titleText, subtitle, isUnlocked),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [titleText, subtitle, isUnlocked, fontsVersion]
+  );
+
+  const { lines, cardWidth, cardHeight, titleAreaWidth, titleBlockHeight, contentHeight } = layout;
+
+  const baseWidth = item.width || CARD_MIN_W;
+  const baseHeight = item.height || CARD_MIN_H;
+  const baseX = Math.max(0, Number(item.x) || 0);
+  const screenX = Math.min(
+    Math.max(0, baseX + (baseWidth - cardWidth) / 2),
+    Math.max(0, WORLD_WIDTH - cardWidth)
+  );
+  const screenY = (Number(item.y) || 0) + (baseHeight - cardHeight) / 2;
 
   const halfW = cardWidth / 2;
   const halfH = cardHeight / 2;
@@ -579,6 +792,7 @@ const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked:
     node.scaleX(0.92);
     node.scaleY(0.92);
     node.getLayer()?.batchDraw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -634,14 +848,11 @@ const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked:
     typeof progress?.completedScenes === 'number' ? progress.completedScenes : null;
   const totalScenes =
     typeof progress?.totalScenes === 'number' ? progress.totalScenes : null;
-  const backendStatus = progress?.status || null;
-
-  const isUnlocked = Boolean(isUnlockedProp);
 
   const hasProgress = progress != null;
   const showProgress = hasProgress && totalScenes !== null && completedScenes !== null;
 
-  const isCompleted = backendStatus === 'completed';
+  const isCompleted = isLessonCompleted(progress);
 
   const pct = isCompleted
     ? 100
@@ -651,7 +862,9 @@ const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked:
 
   const progressText = showProgress ? `${completedScenes}/${totalScenes}` : null;
 
-  const titleText = content.title ? content.title.toUpperCase() : 'UNTITLED';
+  const actionState = getLessonActionState(progress);
+  const actionLabel = ACTION_LABELS[actionState];
+  const [actionColorTop, actionColorBottom] = ACTION_COLORS[actionState];
 
   let colorStart = '#0f172a';
   let colorEnd = '#020617';
@@ -676,25 +889,28 @@ const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked:
   }
 
   const cardStroke = (isHovered && isUnlocked) ? glowColor : 'rgba(255,255,255,0.25)';
-  const isKitchenCard = isUnlocked && !isCompleted && titleText.includes('KITCHEN');
-  const startBtnW = cardWidth - 24;
-  const startBtnH = 30;
-  const startBtnY = cardHeight - startBtnH - 8;
-  const startContentX = (startBtnW - 54) / 2;
   const radius = 18;
 
-  const ringR = Math.round(cardHeight * 0.28);
-  const ringCx = cardWidth - ringR - 10;
-  const ringCy = cardHeight / 2;
+  const ringCx = cardWidth - CARD_PAD_X - RING_D / 2;
+  const ringCy = CARD_PAD_Y + contentHeight / 2;
 
-  const titleW = cardWidth - ringR * 2 - 22;
+  const titleBlockY = CARD_PAD_Y + (contentHeight - titleBlockHeight) / 2;
+  const titleTextHeight = lines.length * TITLE_FONT * TITLE_LINE_H;
+
+  const actionW = cardWidth - CARD_PAD_X * 2;
+  const actionY = cardHeight - CARD_PAD_Y - ACTION_H;
 
   const lockSvgPath = "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Z M7 11V7a5 5 0 0 1 10 0v4";
 
+  const setCursor = (e, value) => {
+    const container = e.target.getStage()?.container();
+    if (container) container.style.cursor = value;
+  };
+
   return (
     <Group
-      x={item.x}
-      y={item.y}
+      x={screenX}
+      y={screenY}
       onClick={(e) => {
         e.cancelBubble = true;
         if (isUnlocked) onNodeClick?.(item);
@@ -703,8 +919,16 @@ const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked:
         e.cancelBubble = true;
         if (isUnlocked) onNodeClick?.(item);
       }}
-      onMouseEnter={() => { if (isUnlocked) setIsHovered(true); }}
-      onMouseLeave={() => { if (isUnlocked) setIsHovered(false); }}
+      onMouseEnter={(e) => {
+        if (!isUnlocked) return;
+        setIsHovered(true);
+        setCursor(e, 'pointer');
+      }}
+      onMouseLeave={(e) => {
+        if (!isUnlocked) return;
+        setIsHovered(false);
+        setCursor(e, 'default');
+      }}
       opacity={isUnlocked ? 1 : 0.6}
     >
       <CardMagicBurst cardWidth={cardWidth} cardHeight={cardHeight} active={magicUnlock} />
@@ -748,103 +972,57 @@ const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked:
           listening={false}
         />
 
-                {isUnlocked && (
-                  <Group
-                    clipFunc={(ctx) => {
-                      ctx.beginPath();
-                      ctx.roundRect(0, 0, cardWidth, cardHeight, radius);
-                      ctx.closePath();
-                    }}
-                  >
-                    <GlassSweep cardWidth={cardWidth} cardHeight={cardHeight} isHovered={isHovered} />
-                  </Group>
-                )}
+        {isUnlocked && (
+          <Group
+            clipFunc={(ctx) => {
+              ctx.beginPath();
+              ctx.roundRect(0, 0, cardWidth, cardHeight, radius);
+              ctx.closePath();
+            }}
+          >
+            <GlassSweep cardWidth={cardWidth} cardHeight={cardHeight} isHovered={isHovered} />
+          </Group>
+        )}
 
         <KonvaText
-          text={titleText}
-          x={12}
-          y={isKitchenCard ? 16 : cardHeight / 2 - 9}
-          width={isKitchenCard ? cardWidth - 24 - 56 : titleW}
-          align="left"
-          fontSize={14}
+          text={lines.join('\n')}
+          x={CARD_PAD_X}
+          y={titleBlockY}
+          width={titleAreaWidth}
+          height={titleTextHeight}
+          align="center"
+          wrap="none"
+          lineHeight={TITLE_LINE_H}
+          fontSize={TITLE_FONT}
           fontStyle="bold"
           fill="#ffffff"
-          fontFamily="Fredoka, sans-serif"
+          fontFamily={CARD_FONT_FAMILY}
           shadowColor="rgba(0,0,0,0.55)"
           shadowBlur={3}
           shadowOffsetY={1}
-          ellipsis
           listening={false}
         />
 
-        {isKitchenCard && (
-          <>
-            <KonvaText
-              text={progressText || '0/0'}
-              x={12}
-              y={16}
-              width={cardWidth - 24}
-              align="right"
-              fontSize={14}
-              fontStyle="bold"
-              fill="#ffffff"
-              fontFamily="Fredoka, sans-serif"
-              shadowColor="rgba(0,0,0,0.55)"
-              shadowBlur={3}
-              shadowOffsetY={1}
-              listening={false}
-            />
-            <Group
-              x={12}
-              y={startBtnY}
-              onMouseEnter={(e) => {
-                const container = e.target.getStage()?.container();
-                if (container) container.style.cursor = 'pointer';
-              }}
-              onMouseLeave={(e) => {
-                const container = e.target.getStage()?.container();
-                if (container) container.style.cursor = 'default';
-              }}
-            >
-              <Rect
-                width={startBtnW}
-                height={startBtnH}
-                cornerRadius={startBtnH / 2}
-                fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-                fillLinearGradientEndPoint={{ x: 0, y: startBtnH }}
-                fillLinearGradientColorStops={[0, '#2dd4bf', 1, '#14b8a6']}
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth={1}
-                shadowColor="#000000"
-                shadowBlur={6}
-                shadowOpacity={0.3}
-                shadowOffsetY={2}
-              />
-              <Line
-                points={[startContentX, startBtnH / 2 - 6, startContentX, startBtnH / 2 + 6, startContentX + 10, startBtnH / 2]}
-                closed
-                fill="#ffffff"
-                listening={false}
-              />
-              <KonvaText
-                text="Start"
-                x={startContentX + 18}
-                y={startBtnH / 2 - 8}
-                fontSize={15}
-                fontStyle="bold"
-                fill="#ffffff"
-                fontFamily="Fredoka, sans-serif"
-                listening={false}
-              />
-            </Group>
-          </>
-        )}
+        {subtitle ? (
+          <KonvaText
+            text={subtitle}
+            x={CARD_PAD_X}
+            y={titleBlockY + titleTextHeight + SUB_GAP}
+            width={titleAreaWidth}
+            align="center"
+            wrap="none"
+            fontSize={SUB_FONT}
+            fill="rgba(255,255,255,0.75)"
+            fontFamily={CARD_FONT_FAMILY}
+            listening={false}
+          />
+        ) : null}
 
-        {showProgress && !isKitchenCard && (
+        {showProgress && (
           <CircularProgressRing
             cx={ringCx}
             cy={ringCy}
-            r={ringR}
+            r={RING_R}
             pct={pct}
             isCompleted={isCompleted}
             progressText={progressText}
@@ -853,28 +1031,49 @@ const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked:
           />
         )}
 
-        {!isUnlocked && !showProgress && (
-          <Path
-            x={ringCx - 9}
-            y={ringCy - 9}
-            data={lockSvgPath}
-            fill="none"
-            stroke="rgba(255,255,255,0.55)"
-            strokeWidth={1.8}
-            scaleX={0.75}
-            scaleY={0.75}
-            listening={false}
-          />
+        {isUnlocked && (
+          <Group x={CARD_PAD_X} y={actionY} listening={false}>
+            <Rect
+              width={actionW}
+              height={ACTION_H}
+              cornerRadius={ACTION_H / 2}
+              fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+              fillLinearGradientEndPoint={{ x: 0, y: ACTION_H }}
+              fillLinearGradientColorStops={[0, actionColorTop, 1, actionColorBottom]}
+              stroke="rgba(255,255,255,0.35)"
+              strokeWidth={1}
+              shadowColor="#000000"
+              shadowBlur={6}
+              shadowOpacity={0.3}
+              shadowOffsetY={2}
+              listening={false}
+            />
+            <KonvaText
+              text={`${actionLabel} →`}
+              x={0}
+              y={0}
+              width={actionW}
+              height={ACTION_H}
+              align="center"
+              verticalAlign="middle"
+              wrap="none"
+              fontSize={14}
+              fontStyle="bold"
+              fill="#ffffff"
+              fontFamily={CARD_FONT_FAMILY}
+              listening={false}
+            />
+          </Group>
         )}
 
-        {!isUnlocked && showProgress && (
+        {!isUnlocked && (
           <Path
             x={ringCx - 9}
             y={ringCy - 9}
             data={lockSvgPath}
             fill="none"
-            stroke="rgba(255,255,255,0.45)"
-            strokeWidth={1.6}
+            stroke={showProgress ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.55)'}
+            strokeWidth={showProgress ? 1.6 : 1.8}
             scaleX={0.75}
             scaleY={0.75}
             listening={false}
@@ -885,16 +1084,17 @@ const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked:
   );
 });
 
-const UserBackgroundSection = React.memo(({ sec, customThemes, stageWidth }) => {
+const UserBackgroundSection = React.memo(({ sec, customThemes, stageWidth, worldWidth, visibleHeight }) => {
   const tObj = customThemes[sec.themeKey] || {};
   const [bgImg] = useImage(getOptimizedImageUrl(tObj.image || ''));
+  const sectionHeight = Math.max(sec.height || 800, (visibleHeight || 800) - (sec.y || 0));
   return (
     <Group y={sec.y} listening={false}>
       <Rect
         name="bg-rect"
-        width={stageWidth}
-        height={sec.height}
-        fill={bgImg ? undefined : (tObj.color || '#599824')}
+        width={worldWidth || stageWidth}
+        height={sectionHeight}
+        fill={bgImg ? undefined : (tObj.color || '#071426')}
         fillPatternImage={bgImg || undefined}
         fillPatternRepeat="repeat"
         listening={false}
@@ -903,7 +1103,9 @@ const UserBackgroundSection = React.memo(({ sec, customThemes, stageWidth }) => 
   );
 });
 
-const UserCanvasItem = React.memo(({ item, onNodeClick }) => {
+const UserCanvasItem = React.memo(({ item, metrics, onNodeClick }) => {
+  void metrics;
+  const screenX = Math.max(0, Number(item.x) || 0);
   const [img, status] = useImage(getOptimizedImageUrl(item.src || item.imageUrl || '', { width: (item.width || 80) * 2 }));
   
   if (status === 'failed') {
@@ -912,7 +1114,7 @@ const UserCanvasItem = React.memo(({ item, onNodeClick }) => {
   
   return (
     <Group
-      x={item.x} y={item.y}
+      x={screenX} y={item.y}
       scaleX={item.scaleX || 1} scaleY={item.scaleY || 1} rotation={item.rotation || 0}
       onClick={onNodeClick ? (e) => { e.cancelBubble = true; onNodeClick(item); } : undefined}
       onTap={onNodeClick ? (e) => { e.cancelBubble = true; onNodeClick(item); } : undefined}
@@ -925,16 +1127,73 @@ const UserCanvasItem = React.memo(({ item, onNodeClick }) => {
   );
 });
 
-const UserRoadPath = React.memo(({ path }) => (
-  <Group listening={false}>
-    <Line points={path.points} stroke="#a9825a" strokeWidth={(path.width || 40) + 10}
-      lineCap="round" lineJoin="round" tension={0.4} opacity={0.9} listening={false} />
-    <Line points={path.points} stroke={path.color || '#e8cd9e'} strokeWidth={path.width || 40}
-      lineCap="round" lineJoin="round" tension={0.4} dash={path.dash} listening={false} />
-    <Line points={path.points} stroke="#f6ecd2" strokeWidth={Math.max(4, (path.width || 40) * 0.32)}
-      lineCap="round" lineJoin="round" tension={0.4} opacity={0.7} dash={[16, 14]} listening={false} />
-  </Group>
-));
+const UserRoadPath = React.memo(({ path, metrics }) => {
+  void metrics;
+  const projectedPoints = path.points;
+  const roadWidth = Math.max(28, Number(path.width) || DEFAULT_ROAD_WIDTH);
+
+  return (
+    <Group listening={false}>
+      <Line
+        points={projectedPoints}
+        stroke="rgba(0, 240, 255, 0.4)"
+        strokeWidth={roadWidth + 14}
+        lineCap="round"
+        lineJoin="round"
+        tension={0.4}
+        shadowColor="#00f0ff"
+        shadowBlur={16}
+        shadowOpacity={0.7}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+      <Line
+        points={projectedPoints}
+        stroke="#00f0ff"
+        strokeWidth={roadWidth + 6}
+        lineCap="round"
+        lineJoin="round"
+        tension={0.4}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+      <Line
+        points={projectedPoints}
+        stroke="#1a1c3d"
+        strokeWidth={roadWidth}
+        lineCap="round"
+        lineJoin="round"
+        tension={0.4}
+        dash={path.dash}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+      <Line
+        points={projectedPoints}
+        stroke="#3b82f6"
+        strokeWidth={roadWidth * 0.55}
+        lineCap="round"
+        lineJoin="round"
+        tension={0.4}
+        opacity={0.4}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+      <Line
+        points={projectedPoints}
+        stroke="#ffffff"
+        strokeWidth={Math.max(3, roadWidth * 0.08)}
+        lineCap="round"
+        lineJoin="round"
+        tension={0.4}
+        opacity={0.9}
+        dash={[14, 12]}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+});
 
 const CurrentLessonPanel = ({ currentLessonProgress, currentLessonMasterId, lessonImage, navigate }) => {
   if (!currentLessonProgress || !currentLessonMasterId) {
@@ -950,6 +1209,14 @@ const CurrentLessonPanel = ({ currentLessonProgress, currentLessonMasterId, less
   const title = currentLessonProgress.title || 'Lesson';
   const lessonOrder = currentLessonProgress.lessonOrder || '—';
   const scenesDisplay = totalScenes > 0 ? `${completedScenes}/${totalScenes}` : '—/—';
+
+  const actionState = getLessonActionState(currentLessonProgress);
+  const panelActionLabel =
+    actionState === 'start'
+      ? 'Start Learning →'
+      : actionState === 'review'
+        ? 'Review Lesson →'
+        : 'Continue Learning →';
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 shrink-0">
@@ -1009,7 +1276,7 @@ const CurrentLessonPanel = ({ currentLessonProgress, currentLessonMasterId, less
           }}
           className="w-full py-2 bg-teal-600 text-white font-bold text-xs rounded-xl shadow-sm hover:bg-teal-700 transition-colors cursor-pointer"
         >
-          Continue Learning →
+          {panelActionLabel}
         </button>
       </div>
     </div>
@@ -1131,16 +1398,12 @@ const AdventureMap = () => {
   const characterProgressError = useSelector(selectCharacterProgressError);
   const progressStats = useSelector(selectUserProgressStats);
 
-  // Sidebar / mobile top bar / bottom bar / profile & more sheets now live in Navbar.jsx.
-  // The active language is shared with the Navbar's language dropdown.
   const [activeLanguage] = useActiveLanguage();
 
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpData, setLevelUpData] = useState({ level: 1 });
   const previousLevelRef = useRef(null);
 
-  // LevelUp is a level-change celebration only.
-  // Reward amounts are intentionally NOT calculated here.
   useEffect(() => {
     if (!progressStats?.level) return;
 
@@ -1159,8 +1422,6 @@ const AdventureMap = () => {
     previousLevelRef.current = progressStats.level;
   }, [progressStats?.level]);
 
-  // DEV ONLY — TEMPORARY LEVEL UP MODAL PREVIEW
-  // Remove this block after UI testing is complete.
   const levelUpTestTriggeredRef = useRef(false);
 
   useEffect(() => {
@@ -1195,7 +1456,7 @@ const AdventureMap = () => {
     };
   }, []);
 
-  const [containerWidth, setContainerWidth] = useState(DESIGN_WIDTH);
+  const [containerWidth, setContainerWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 800));
   const [languageDb, setLanguageDb] = useState({});
   const [languageStatus, setLanguageStatus] = useState('loading');
   const [languageError, setLanguageError] = useState(null);
@@ -1312,30 +1573,6 @@ const AdventureMap = () => {
 
   const fetchedBuildingAssetIds = useRef(new Set());
 
-  useEffect(() => {
-    if (!mapItems || mapItems.length === 0 || !lessonUnlockMap) return;
-
-    mapItems.forEach((item) => {
-      if (item.type === 'Lesson Cards' && item.buildingId) {
-        let lmId = item.lessonMasterId || item.lessonMaster || item.lessonId || item.masterId;
-        lmId = typeof lmId === 'object' ? lmId._id?.toString() : lmId?.toString();
-
-        if (!lmId && typeof item.order === 'number' && item.order > 0) {
-          lmId = lmIdByOrder[item.order] || null;
-        }
-
-        const isUnlocked = lmId && lessonUnlockMap[lmId]?.unlocked === true;
-        if (isUnlocked) {
-          const building = mapItems.find(b => b.id === item.buildingId);
-          if (building && building.isLocked && !fetchedBuildingAssetIds.current.has(building.id)) {
-            fetchedBuildingAssetIds.current.add(building.id);
-            dispatch(fetchUnlockedLessonAsset(lmId));
-          }
-        }
-      }
-    });
-  }, [mapItems, lessonUnlockMap, lmIdByOrder, dispatch]);
-
   const {
     isWalking,
     isTransitionActive,
@@ -1355,45 +1592,157 @@ const AdventureMap = () => {
     progressSummary,
   );
 
+  const lessonBuildingStateByBuildingId = useMemo(() => {
+    const map = {};
+    (languageMapProgress.visibleCards || []).forEach((card) => {
+      const buildingId = normalizeId(card.buildingId);
+      if (!buildingId) return;
+
+      const lessonMasterId = resolveLessonMasterId(card, progressSummary)
+        || (typeof card.order === 'number' && card.order > 0 ? lmIdByOrder[card.order] : null)
+        || null;
+
+      const isOrder1 = Number(card.order) === 1;
+      const isMagicTarget = Boolean(
+        magicUnlockCardId && normalizeId(card.id) === normalizeId(magicUnlockCardId)
+      );
+      const unlocked = isOrder1
+        || isMagicTarget
+        || Boolean(lessonMasterId && lessonUnlockMap?.[lessonMasterId]?.unlocked === true);
+
+      const previous = map[buildingId];
+      map[buildingId] = {
+        cardId: normalizeId(card.id),
+        lessonMasterId: unlocked ? lessonMasterId : (previous?.lessonMasterId || lessonMasterId),
+        unlocked: Boolean(previous?.unlocked) || unlocked,
+      };
+    });
+    return map;
+  }, [languageMapProgress.visibleCards, progressSummary, lmIdByOrder, lessonUnlockMap, magicUnlockCardId]);
+
+  useEffect(() => {
+    if (!mapItems || mapItems.length === 0) return;
+
+    mapItems.forEach((building) => {
+      if (building.type !== 'Buildings') return;
+      const buildingKey = normalizeId(building.id);
+      if (!buildingKey) return;
+
+      const lessonState = lessonBuildingStateByBuildingId[buildingKey];
+      if (!lessonState || !lessonState.unlocked || !lessonState.lessonMasterId) return;
+
+      const assetMissing = Boolean(building.isLocked) || !(building.src || building.imageUrl);
+      if (!assetMissing) return;
+      if (fetchedBuildingAssetIds.current.has(buildingKey)) return;
+
+      fetchedBuildingAssetIds.current.add(buildingKey);
+      dispatch(fetchUnlockedLessonAsset(lessonState.lessonMasterId));
+    });
+  }, [mapItems, lessonBuildingStateByBuildingId, dispatch]);
+
   const transitionCardId = normalizeId(targetCardId || lastTransitionTargetCardId);
   const transitionTargetCard = useMemo(
     () => mapItems.find((item) => normalizeId(item.id) === transitionCardId) || null,
     [mapItems, transitionCardId]
   );
 
-  const lastVisibleCard = languageMapProgress.visibleCards.length > 0
-    ? languageMapProgress.visibleCards[languageMapProgress.visibleCards.length - 1]
+  const userVisibleCards = useMemo(() => {
+    const published = languageMapProgress.visibleCards || [];
+    return published.filter((card) => {
+      const content = getItemContent(card, resolvedLanguage);
+      const title = String(content.title || '').trim();
+      if (!title || title.toUpperCase() === 'UNTITLED') return false;
+
+      const finalLmId = resolveLessonMasterId(card, progressSummary)
+        || (typeof card.order === 'number' && card.order > 0 ? lmIdByOrder[card.order] : null);
+
+      const isOrder1 = card.order === 1;
+      const isUnlocked = isOrder1 || Boolean(finalLmId && lessonUnlockMap?.[finalLmId]?.unlocked === true);
+      const isTransitionTarget = Boolean(
+        (isTransitionActive && normalizeId(card.id) === normalizeId(targetCardId)) ||
+        (magicUnlockCardId && normalizeId(card.id) === normalizeId(magicUnlockCardId))
+      );
+
+      return isUnlocked || isTransitionTarget;
+    });
+  }, [
+    languageMapProgress.visibleCards,
+    resolvedLanguage,
+    progressSummary,
+    lmIdByOrder,
+    lessonUnlockMap,
+    isTransitionActive,
+    targetCardId,
+    magicUnlockCardId,
+  ]);
+
+  const userVisibleCardIds = useMemo(
+    () => new Set(userVisibleCards.map((c) => c.id)),
+    [userVisibleCards]
+  );
+
+  const userVisibleBuildingIds = useMemo(
+    () => new Set(userVisibleCards.map((c) => c.buildingId).filter(Boolean)),
+    [userVisibleCards]
+  );
+
+  const allPublishedBuildingIds = useMemo(
+    () => new Set(
+      (languageMapProgress.visibleCards || []).map((c) => normalizeId(c.buildingId)).filter(Boolean)
+    ),
+    [languageMapProgress.visibleCards]
+  );
+
+  const lastVisibleCard = userVisibleCards.length > 0
+    ? userVisibleCards[userVisibleCards.length - 1]
+    : null;
+  void lastVisibleCard;
+
+  const allPublishedCards = languageMapProgress.visibleCards || [];
+  const lastPublishedCard = allPublishedCards.length > 0
+    ? allPublishedCards[allPublishedCards.length - 1]
     : null;
 
-  const endMessageTopGap = 120;
+  const lastPublishedBuilding = useMemo(() => {
+    if (!lastPublishedCard?.buildingId) return null;
+    return mapItems.find((i) => i.type === 'Buildings' && String(i.id) === String(lastPublishedCard.buildingId)) || null;
+  }, [lastPublishedCard, mapItems]);
+
+  const lastPublishedContentBottom = useMemo(() => {
+    if (!lastPublishedCard) return 0;
+    const cardBottom = (Number(lastPublishedCard.y) || 0) + (Number(lastPublishedCard.height) || 72);
+    const bldgBottom = lastPublishedBuilding
+      ? (Number(lastPublishedBuilding.y) || 0) + (Number(lastPublishedBuilding.height) || 60)
+      : 0;
+    return Math.max(cardBottom, bldgBottom);
+  }, [lastPublishedCard, lastPublishedBuilding]);
+
+  const endMessageTopGap = 80;
   const endMessageComponentHeight = 240;
-  const bottomPadding = 50;
+  const bottomPadding = 60;
 
-  const lastVisibleCardBottom = lastVisibleCard
-    ? lastVisibleCard.y + (lastVisibleCard.height || 90)
-    : 0;
+  const endMessageY = lastPublishedCard ? lastPublishedContentBottom + endMessageTopGap : 0;
+  const endMessageBottom = endMessageY + endMessageComponentHeight;
 
-  const endMessageY = lastVisibleCardBottom + endMessageTopGap;
+  const roadContinuationY = useMemo(() => {
+    let maxY = endMessageBottom + 40;
+    roadPaths.forEach((path) => {
+      if (!path.visible || !path.points) return;
+      for (let i = 1; i < path.points.length; i += 2) {
+        const py = path.points[i];
+        if (py >= endMessageY && py <= endMessageBottom + 180) {
+          if (py > maxY) maxY = py;
+        }
+      }
+    });
+    return maxY;
+  }, [endMessageBottom, endMessageY, roadPaths]);
 
-  let visibleMapHeight = lastVisibleCard
-    ? Math.max(
-        languageMapProgress.visibleHeight,
-        lastVisibleCardBottom + endMessageTopGap + endMessageComponentHeight + bottomPadding
-      )
-    : languageMapProgress.visibleHeight;
+  const visibleMapHeight = useMemo(() => {
+    if (!lastPublishedCard) return 600;
+    return Math.max(600, endMessageBottom + bottomPadding, roadContinuationY + bottomPadding);
+  }, [lastPublishedCard, endMessageBottom, roadContinuationY]);
 
-  // Keep the authored map height available even when most lesson cards are
-  // locked or outside the current render window. Viewport filtering reduces
-  // Konva work; it must never make the complete map impossible to scroll.
-  const authoredMapHeight = useMemo(() => Math.max(
-    0,
-    ...bgSections.map((section) => (Number(section.y) || 0) + (Number(section.height) || 0)),
-    ...mapItems.map((item) => (Number(item.y) || 0) + (Number(item.height) || 60)),
-    ...roadPaths.flatMap((path) => (path.points || []).filter((_, index) => index % 2 === 1))
-  ), [bgSections, mapItems, roadPaths]);
-  visibleMapHeight = Math.max(visibleMapHeight, authoredMapHeight);
-
-  const hasUnlinkedVisibleCards = languageMapProgress.visibleCards.some((card) => !card.buildingId);
   const categoryOrder = useMemo(
     () => resolveCategoryOrder(mapData?.categoriesList, mapItems),
     [mapData?.categoriesList, mapItems]
@@ -1406,7 +1755,7 @@ const AdventureMap = () => {
     try {
       localStorage.setItem('pic2speak_active_language', resolvedLanguage);
     } catch {
-      // Local storage may be unavailable in restricted browser contexts.
+      return;
     }
     setRequestedDataKey(`${resolvedLanguage}:${initializationRetryKey}`);
     dispatch(fetchLessonProgressSummary(langObj._id));
@@ -1415,7 +1764,6 @@ const AdventureMap = () => {
     dispatch(fetchMyStats());
     dispatch(fetchMyRewards());
   }, [resolvedLanguage, languageDb, languageStatus, initializationRetryKey, dispatch]);
-
 
   const itemsByCategory = useMemo(() => {
     const groups = {};
@@ -1477,8 +1825,6 @@ const AdventureMap = () => {
     return nearest || { x: cx, y: building.y + (building.height || 40) + 16 };
   }, [characterConfigItem, characterProgress, characterProgressLoading, languageMapProgress, mapItems, roadPaths, progressSummary]);
 
-
-
   const { top: vpTop, bottom: vpBottom } = viewportBounds;
   const transitionTargetBuildingId = normalizeId(transitionTargetCard?.buildingId);
 
@@ -1498,17 +1844,16 @@ const AdventureMap = () => {
         if (!inViewport) return false;
 
         if (item.type === 'Lesson Cards') {
-          return languageMapProgress.visibleCardIds.has(item.id);
+          return userVisibleCardIds.has(item.id);
         }
         if (item.type === 'Buildings') {
-          return languageMapProgress.visibleBuildingIds.has(item.id) ||
-            (hasUnlinkedVisibleCards && item.y <= visibleMapHeight);
+          return allPublishedBuildingIds.has(normalizeId(item.id));
         }
-        return true;
+        return itemTop <= visibleMapHeight;
       });
     });
     return groups;
-  }, [categoryOrder, characterAnchor, hasUnlinkedVisibleCards, itemsByCategory, languageMapProgress, transitionCardId, transitionTargetBuildingId, visibleMapHeight, vpBottom, vpTop]);
+  }, [categoryOrder, characterAnchor, itemsByCategory, userVisibleCardIds, userVisibleBuildingIds, allPublishedBuildingIds, transitionCardId, transitionTargetBuildingId, visibleMapHeight, vpBottom, vpTop]);
 
   const currentLessonProgress = useMemo(() => {
     if (characterProgressLoading || !characterProgress) return null;
@@ -1538,9 +1883,10 @@ const AdventureMap = () => {
   );
 
   const handleLessonCardClick = useCallback((item) => {
-    const lessonMasterId = resolveLessonMasterId(item, progressSummary);
+    const lessonMasterId = resolveLessonMasterId(item, progressSummary)
+      || (typeof item?.order === 'number' && item.order > 0 ? lmIdByOrder[item.order] : null);
     if (lessonMasterId) navigate(`/sentence-list/${lessonMasterId}`);
-  }, [navigate, progressSummary]);
+  }, [navigate, progressSummary, lmIdByOrder]);
 
   const currentLessonMapImage = useMemo(() => {
     if (!currentLessonMasterId || !languageMapProgress.visibleCards) return null;
@@ -1586,8 +1932,9 @@ const AdventureMap = () => {
     return building.src || building.imageUrl || null;
   }, [currentLessonMasterId, languageMapProgress, progressSummary, mapItems]);
 
-  const scale = containerWidth > 0 ? containerWidth / DESIGN_WIDTH : 1;
-  const stageWidth = containerWidth > 0 ? containerWidth : DESIGN_WIDTH;
+  const metrics = getResponsiveLayoutMetrics(containerWidth);
+  const scale = metrics.scale;
+  const stageWidth = metrics.containerWidth;
   const stageHeight = visibleMapHeight * scale;
 
   const currentLessonIsUnlocked = Boolean(
@@ -1788,10 +2135,10 @@ const AdventureMap = () => {
     setRevealedCardIds((prev) => {
       let changed = false;
       const next = new Set(prev);
-      languageMapProgress.visibleCards.forEach((card) => {
+      userVisibleCards.forEach((card) => {
         if (next.has(card.id)) return;
         const cardTop = card.y * scale;
-        const cardBottom = (card.y + (card.height || 90)) * scale;
+        const cardBottom = (card.y + (card.height || 72)) * scale;
         if (cardBottom >= visibleTop && cardTop <= visibleBottom) {
           next.add(card.id);
           changed = true;
@@ -1809,7 +2156,7 @@ const AdventureMap = () => {
       setViewportBounds(viewportBoundsRef.current);
     }
 
-  }, [languageMapProgress, scale]);
+  }, [userVisibleCards, scale]);
 
   useEffect(() => {
     const mainEl = mainScrollRef.current;
@@ -1838,7 +2185,7 @@ const AdventureMap = () => {
   const lastSectionTheme = bgSections.length
     ? customThemes[bgSections[bgSections.length - 1].themeKey]
     : null;
-  const fallbackBgColor = lastSectionTheme?.color || '#599824';
+  const fallbackBgColor = lastSectionTheme?.color || '#071426';
   const renderWindowTopPx = Math.max(0, Math.min(stageHeight, vpTop * scale));
   const renderWindowBottomPx = Math.max(
     renderWindowTopPx + 1,
@@ -1850,15 +2197,13 @@ const AdventureMap = () => {
     : 'calc(100dvh - var(--shell-top-h, 0px) - var(--shell-bottom-h, 0px))';
 
   return (
-    // Height on mobile = viewport minus the fixed top bar & bottom bar (CSS vars set by Navbar).
-    // On desktop the Navbar sidebar is fixed on the left and #root is padded, so h-screen is correct.
     <div className="flex flex-col lg:flex-row h-[calc(100dvh_-_var(--shell-top-h,0px)_-_var(--shell-bottom-h,0px))] lg:h-screen w-full bg-slate-100 text-slate-800 overflow-hidden font-sans">
       <main
         ref={mainScrollRef}
         className="flex-1 min-w-0 flex flex-col overflow-y-auto overflow-x-hidden overscroll-contain relative lg:h-full min-h-0"
       >
         <div className="flex-1 w-full px-0 pb-6 flex flex-col items-center">
-          <div ref={containerRef} className="w-full max-w-[800px] relative flex justify-center">
+          <div ref={containerRef} className="w-full relative flex justify-center">
             <div className="w-full relative overflow-hidden" style={{ height: mapViewportHeight, minHeight: mapViewportHeight }}>
               {mapViewportError ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-slate-50 px-6 text-center">
@@ -1893,7 +2238,7 @@ const AdventureMap = () => {
                           return secBottom >= vpTop && sec.y <= vpBottom;
                         })
                         .map((sec) => (
-                          <UserBackgroundSection key={sec.id} sec={sec} customThemes={customThemes} stageWidth={DESIGN_WIDTH} />
+                          <UserBackgroundSection key={sec.id} sec={sec} customThemes={customThemes} stageWidth={stageWidth} worldWidth={WORLD_WIDTH} visibleHeight={visibleMapHeight} />
                         ))}
                     </Group>
                   </Layer>
@@ -1903,7 +2248,7 @@ const AdventureMap = () => {
                       {roadPaths.map((path) => {
                         if (!path.visible || path.points.length < 2) return null;
                         if (isTransitionActive && path.id === transitionTargetPosition?.roadId) {
-                          return <UserRoadPath key={path.id} path={path} />;
+                          return <UserRoadPath key={path.id} path={path} metrics={metrics} />;
                         }
                         let minY = Infinity, maxY = -Infinity;
                         for (let i = 1; i < path.points.length; i += 2) {
@@ -1911,23 +2256,8 @@ const AdventureMap = () => {
                           if (path.points[i] > maxY) maxY = path.points[i];
                         }
                         if (maxY < vpTop || minY > vpBottom) return null;
-                        return <UserRoadPath key={path.id} path={path} />;
+                        return <UserRoadPath key={path.id} path={path} metrics={metrics} />;
                       })}
-                    </Group>
-                  </Layer>
-
-                  <Layer y={-renderWindowTopPx} name="end-mask-layer" listening={false}>
-                    <Group scaleX={scale} scaleY={scale} listening={false}>
-                      {lastVisibleCard && (
-                        <Rect
-                          x={0}
-                          y={endMessageY - 15}
-                          width={DESIGN_WIDTH}
-                          height={endMessageComponentHeight + bottomPadding + 30}
-                          fill={fallbackBgColor}
-                          listening={false}
-                        />
-                      )}
                     </Group>
                   </Layer>
 
@@ -1949,7 +2279,14 @@ const AdventureMap = () => {
                                     : item;
                                 if (renderItem === null) return null;
 
-                                let finalIsLocked = renderItem.isLocked;
+                                const lessonBuildingState = renderItem.type === 'Buildings'
+                                  ? lessonBuildingStateByBuildingId[normalizeId(renderItem.id)] || null
+                                  : null;
+
+                                let finalIsLocked = lessonBuildingState
+                                  ? !lessonBuildingState.unlocked
+                                  : renderItem.isLocked;
+
                                 if (isTransitionActive && targetCardId && renderItem.id) {
                                   if (transitionTargetBuildingId === normalizeId(renderItem.id)) {
                                     finalIsLocked = true;
@@ -1961,14 +2298,21 @@ const AdventureMap = () => {
                                     <UserLockedLocation
                                       key={item.id}
                                       item={renderItem}
-                                    />
+                                      metrics={metrics}
+                                      />
                                   );
                                 }
+
+                                const unlockedRenderItem = lessonBuildingState
+                                  ? { ...renderItem, isLocked: false }
+                                  : renderItem;
+
                                 return (
                                   <UserCanvasItem
                                     key={item.id}
-                                    item={renderItem}
-                                  />
+                                    item={unlockedRenderItem}
+                                    metrics={metrics}
+                                    />
                                 );
                               })}
                             {catName === 'Lesson Cards' &&
@@ -1976,42 +2320,37 @@ const AdventureMap = () => {
                                 const finalLmId = resolveLessonMasterId(item, progressSummary)
                                   || (typeof item.order === 'number' && item.order > 0 ? lmIdByOrder[item.order] : null);
 
-                                  const progress = finalLmId ? progressByLessonMasterId[finalLmId] : undefined;
-                                  const unlockState = finalLmId ? lessonUnlockMap[finalLmId] : null;
+                                const progress = finalLmId ? progressByLessonMasterId[finalLmId] : undefined;
+                                const unlockState = finalLmId ? lessonUnlockMap[finalLmId] : null;
 
-                                   const isBeingUnlocked = isTransitionActive && normalizeId(item.id) === normalizeId(targetCardId);
-                                  const isOrder1 = item.order === 1;
-                                  const isUnlocked = isOrder1
-                                    ? true
-                                    : (!isBeingUnlocked && unlockState?.unlocked === true);
+                                const isBeingUnlocked = isTransitionActive && normalizeId(item.id) === normalizeId(targetCardId);
+                                const isOrder1 = item.order === 1;
+                                const isUnlocked = isOrder1
+                                  ? true
+                                  : (!isBeingUnlocked && unlockState?.unlocked === true);
 
-                                  // Keep the card visible while the magic animation is playing on it,
-                                  // even if unlockState hasn't propagated yet.
-                                   const isMagicTarget = normalizeId(item.id) === normalizeId(magicUnlockCardId);
+                                const isMagicTarget = normalizeId(item.id) === normalizeId(magicUnlockCardId);
 
-                                  if (!isUnlocked && !isOrder1 && !isBeingUnlocked && !isMagicTarget) {
-                                    return null;
-                                  }
-
-                                  return (
-                                    <UserLessonCard
-                                      key={item.id}
-                                      item={item}
-                                      activeLanguage={resolvedLanguage}
-                                      progress={progress}
-                                      isUnlocked={isUnlocked || isMagicTarget}
-                                      revealed={REDUCED_MOTION || isBeingUnlocked || isMagicTarget || revealedCardIds.has(item.id)}
-                                      magicUnlock={isMagicTarget}
-                                      onNodeClick={handleLessonCardClick}
-                                    />
-                                  );
+                                return (
+                                  <UserLessonCard
+                                    key={item.id}
+                                    item={item}
+                                    activeLanguage={resolvedLanguage}
+                                    progress={progress}
+                                    isUnlocked={isUnlocked || isMagicTarget}
+                                    revealed={REDUCED_MOTION || isBeingUnlocked || isMagicTarget || revealedCardIds.has(item.id)}
+                                    magicUnlock={isMagicTarget}
+                                    onNodeClick={handleLessonCardClick}
+                                  />
+                                );
                               })}
                           </Group>
                         );
                       })}
 
-                      <UserWalkingCharacter 
+                      <UserWalkingCharacter
                         characterConfig={characterConfigItem}
+                        scale={scale}
                         isWalking={isWalking}
                         isTransitionActive={isTransitionActive}
                         currentPos={currentPos}
@@ -2019,8 +2358,8 @@ const AdventureMap = () => {
                         walkFrameIndex={walkFrameIndex}
                       />
 
-                      {lastVisibleCard && (
-                        <MoreLessonsComingSoon y={endMessageY} />
+                      {lastPublishedCard && (
+                        <MoreLessonsComingSoon y={endMessageY} worldWidth={WORLD_WIDTH} />
                       )}
                     </Group>
                   </Layer>
@@ -2063,7 +2402,6 @@ const AdventureMap = () => {
         </div>
       </aside>
 
-      {/* Level Up Overlay */}
       <AnimatePresence>
         {showLevelUp && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4 sm:p-6">
@@ -2074,7 +2412,6 @@ const AdventureMap = () => {
               transition={{ duration: 0.4, ease: "easeOut" }}
               className="relative w-full max-w-[500px] rounded-[32px] overflow-hidden border-[3px] border-white/70 shadow-[0_20px_60px_-15px_rgba(13,148,136,0.4)] bg-gradient-to-br from-white via-[#e0f8fb] to-[#ccf2f6] text-center p-6 md:p-8 md:[@media(max-height:820px)]:!py-5 flex flex-col items-center"
             >
-              {/* Particles */}
               {!REDUCED_MOTION && (
                 <div className="absolute inset-0 pointer-events-none overflow-hidden">
                   <motion.div
@@ -2082,7 +2419,6 @@ const AdventureMap = () => {
                     transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
                     className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-yellow-300/20 rounded-full blur-[60px]"
                   />
-                  {/* Confetti pieces */}
                   <div className="absolute top-1/4 left-[10%] w-3 h-8 bg-teal-400 rotate-45 rounded-sm" />
                   <div className="absolute top-1/3 right-[15%] w-4 h-4 bg-yellow-400 rotate-12 rounded-full" />
                   <div className="absolute bottom-1/4 left-[20%] w-5 h-5 bg-cyan-400 rotate-45 rounded-sm" />
@@ -2092,7 +2428,6 @@ const AdventureMap = () => {
                 </div>
               )}
 
-              {/* Crown */}
               <motion.div
                 initial={REDUCED_MOTION ? {} : { y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -2108,7 +2443,6 @@ const AdventureMap = () => {
                 </svg>
               </motion.div>
 
-              {/* LEVEL UP Banner */}
               <motion.div
                 initial={REDUCED_MOTION ? {} : { scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -2116,7 +2450,6 @@ const AdventureMap = () => {
                 className="relative z-10 mb-6 md:[@media(max-height:820px)]:!mb-3"
               >
                 <div className="bg-gradient-to-b from-teal-400 to-teal-600 px-8 py-3 rounded-full shadow-[0_10px_20px_-5px_rgba(13,148,136,0.5)] border-b-4 border-teal-700 relative">
-                  {/* Ribbon tails */}
                   <div className="absolute -left-4 top-4 bottom-4 w-8 bg-teal-700 -z-10 rounded-l-md skew-x-[-15deg] shadow-inner" />
                   <div className="absolute -right-4 top-4 bottom-4 w-8 bg-teal-700 -z-10 rounded-r-md skew-x-[15deg] shadow-inner" />
                   <h2 className="text-3xl md:text-4xl font-black text-white tracking-wider uppercase drop-shadow-[0_2px_2px_rgba(0,0,0,0.3)]">
@@ -2125,7 +2458,6 @@ const AdventureMap = () => {
                 </div>
               </motion.div>
 
-              {/* Level Number */}
               <motion.div
                 initial={REDUCED_MOTION ? {} : { scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -2134,7 +2466,6 @@ const AdventureMap = () => {
               >
                 <p className="text-lg font-bold text-teal-800 uppercase tracking-widest mb-[-10px]">Level</p>
                 <div className="flex items-center justify-center gap-4">
-                  {/* Left Laurel */}
                   <svg width="40" height="80" viewBox="0 0 40 80" className="text-teal-300/60 fill-current opacity-80 rotate-[-10deg]">
                     <path d="M35 10 C 20 30, 0 50, 10 75 C 10 50, 30 30, 35 10 Z" />
                     <path d="M25 25 C 15 35, 5 45, 12 60 C 15 45, 25 35, 25 25 Z" />
@@ -2145,7 +2476,6 @@ const AdventureMap = () => {
                     {levelUpData.level}
                   </span>
 
-                  {/* Right Laurel */}
                   <svg width="40" height="80" viewBox="0 0 40 80" className="text-teal-300/60 fill-current opacity-80 rotate-[10deg] scale-x-[-1]">
                     <path d="M35 10 C 20 30, 0 50, 10 75 C 10 50, 30 30, 35 10 Z" />
                     <path d="M25 25 C 15 35, 5 45, 12 60 C 15 45, 25 35, 25 25 Z" />
@@ -2154,7 +2484,6 @@ const AdventureMap = () => {
                 </div>
               </motion.div>
 
-              {/* Message */}
               <motion.div
                 initial={REDUCED_MOTION ? {} : { y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -2166,7 +2495,6 @@ const AdventureMap = () => {
                 <p className="text-sm text-slate-500 mt-1 max-w-[280px] mx-auto">Keep going — your next adventure is waiting for you!</p>
               </motion.div>
 
-              {/* Continue Button */}
               <motion.div
                 initial={REDUCED_MOTION ? {} : { opacity: 0 }}
                 animate={{ opacity: 1 }}

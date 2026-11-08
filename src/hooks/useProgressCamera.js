@@ -7,7 +7,7 @@ const getReducedMotion = () => (
 
 const getCardCenterY = (card) => {
   if (!card) return null;
-  return (Number(card.y) || 0) + (Number(card.height) || 90) / 2;
+  return (Number(card.y) || 0) + (Number(card.height) || 72) / 2;
 };
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, max));

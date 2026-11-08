@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchMyRewards } from '../redux/slices/rewardSlice';
 import { fetchMyStats } from '../redux/slices/userProgressSlice';
-
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
@@ -27,23 +25,21 @@ import {
 } from '../redux/slices/lessonProgressSlice';
 
 import LessonCompletionModal from '../ui/LessonCompletionModal';
-
 import { useActiveLanguage, useLanguageOptions } from '../hooks/Useactivelanguage';
 
-// Dynamic height class for single-screen view without scrolling
 const VIEWPORT_HEIGHT = 'calc(100dvh - var(--shell-top-h, 0px) - var(--shell-bottom-h, 0px))';
 
 const ProgressBar = ({ current, total }) => {
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
-      <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] text-indigo-200 font-medium whitespace-nowrap">
         Progress {pct}%
       </span>
-      <div className="h-2 w-24 sm:w-48 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+      <div className="h-1.5 w-14 sm:w-24 bg-slate-800/80 rounded-full overflow-hidden border border-indigo-500/30 shadow-inner">
         <div
-          className="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out"
+          className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(168,85,247,0.7)]"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -51,46 +47,6 @@ const ProgressBar = ({ current, total }) => {
   );
 };
 
-const AudioButton = ({ audioUrl }) => {
-  const audioRef = useRef(null);
-  const [playing, setPlaying] = useState(false);
-
-  const play = useCallback(() => {
-    if (!audioUrl) return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio(audioUrl);
-    }
-    audioRef.current.src = audioUrl;
-    audioRef.current.currentTime = 0;
-    audioRef.current
-      .play()
-      .then(() => setPlaying(true))
-      .catch(() => setPlaying(false));
-    audioRef.current.onended = () => setPlaying(false);
-  }, [audioUrl]);
-
-  if (!audioUrl) {
-    return (
-      <div className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-slate-100 opacity-40 cursor-not-allowed">
-        <span className="text-lg sm:text-xl">🔇</span>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={play}
-      className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-emerald-50 border-2 border-emerald-300 hover:bg-emerald-100 transition-colors shadow-sm shrink-0"
-      title="Listen"
-    >
-      <span className="text-lg sm:text-xl">{playing ? '🔊' : '🔉'}</span>
-    </button>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: resolve a sceneId value that may be a populated ObjectId or a string
-// ─────────────────────────────────────────────────────────────────────────────
 const resolveId = (value) => {
   if (!value) return null;
   if (typeof value === 'object' && value._id) return String(value._id);
@@ -102,7 +58,6 @@ const SentenceList = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // ── Viewport lock ──────────────────────────────────────────────────────────
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -121,7 +76,6 @@ const SentenceList = () => {
     };
   }, []);
 
-  // ── Language resolution ────────────────────────────────────────────────────
   const [activeLanguage] = useActiveLanguage();
   const languages = useLanguageOptions();
 
@@ -138,7 +92,6 @@ const SentenceList = () => {
   const selectedLanguage = activeLanguage || 'en';
   const languageId = languageDb[selectedLanguage]?._id || null;
 
-  // ── Redux selectors ────────────────────────────────────────────────────────
   const sceneContentStatus = useSelector(selectSceneContentStatus);
   const sceneContentLessonId = useSelector(selectSceneContentLessonMasterId);
   const sceneContentLangId = useSelector(selectSceneContentLanguageId);
@@ -146,7 +99,6 @@ const SentenceList = () => {
   const sentences = useSelector((state) => selectSentencesForLesson(state)) || [];
   const progressSummary = useSelector(selectLessonProgressSummary);
 
-  // currentProgress is written by startLesson.fulfilled, getLessonProgress.fulfilled, completeScene.fulfilled
   const currentProgress = useSelector(selectCurrentLessonProgress);
   const progressError = useSelector(selectLessonProgressError);
   const actionStatus = useSelector((state) => state.lessonProgress?.actionStatus || 'idle');
@@ -160,7 +112,6 @@ const SentenceList = () => {
     });
   }, [progressSummary, lessonMasterId]);
 
-  // ── Local state ────────────────────────────────────────────────────────────
   const [currentIndex, setCurrentIndex] = useState(0);
   const [lessonTitle, setLessonTitle] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -170,15 +121,12 @@ const SentenceList = () => {
     xpGranted: false,
     coinsGranted: false,
   });
+  const [playingAudio, setPlayingAudio] = useState(false);
 
-  // True while a completeScene network request is in flight.
   const submittingRef = useRef(false);
-
-  // Tracks whether we have already synced the index from backend progress for
-  // this (lessonMasterId + languageId) pair.
   const progressSyncedRef = useRef(false);
+  const audioRef = useRef(null);
 
-  // ── Content & Progress readiness validation ────────────────────────────────
   const isContentReady = useMemo(() => {
     return (
       sceneContentStatus === 'succeeded' &&
@@ -195,7 +143,6 @@ const SentenceList = () => {
     );
   }, [currentProgress, lessonMasterId, languageId]);
 
-  // ── Navigation guard ───────────────────────────────────────────────────────
   useEffect(() => {
     if (
       progressError &&
@@ -207,14 +154,12 @@ const SentenceList = () => {
     }
   }, [progressError, navigate]);
 
-  // ── Lesson title ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (lessonSummary?.title) {
       setLessonTitle(lessonSummary.title);
     }
   }, [lessonSummary]);
 
-  // ── Reset state and clean stale data on lesson/language change ─────────────
   useEffect(() => {
     progressSyncedRef.current = false;
     setCurrentIndex(0);
@@ -222,7 +167,6 @@ const SentenceList = () => {
     dispatch(clearSceneContents());
   }, [lessonMasterId, languageId, dispatch]);
 
-  // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       dispatch(clearCurrentProgress());
@@ -230,7 +174,6 @@ const SentenceList = () => {
     };
   }, [dispatch]);
 
-  // ── Fetch scene content + start lesson ─────────────────────────────────────
   useEffect(() => {
     if (languageId && lessonMasterId) {
       dispatch(fetchSceneContents({ lessonMasterId, languageId }));
@@ -242,9 +185,6 @@ const SentenceList = () => {
     dispatch(startLesson({ lessonMasterId, languageId }));
   }, [lessonMasterId, languageId, dispatch]);
 
-  // ── Progress synchronisation ───────────────────────────────────────────────
-  // Runs ONLY when both scene contents and lesson progress are fully loaded
-  // for the current lesson and language.
   useEffect(() => {
     if (progressSyncedRef.current) return;
     if (!isContentReady || !isProgressReady) return;
@@ -270,18 +210,15 @@ const SentenceList = () => {
     progressSyncedRef.current = true;
   }, [isContentReady, isProgressReady, sentences, currentProgress]);
 
-  // ── Derived values ─────────────────────────────────────────────────────────
   const totalSentences = sentences.length;
   const current = sentences[currentIndex] || null;
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === totalSentences - 1;
 
-  // The scene the backend considers as "current" — used for the Next action.
   const backendCurrentSceneId = useMemo(() => {
     return resolveId(currentProgress?.currentSceneId) || null;
   }, [currentProgress]);
 
-  // The index of the backend's current scene in the sentences array.
   const backendCurrentIndex = useMemo(() => {
     if (!backendCurrentSceneId || !sentences.length) return -1;
     return sentences.findIndex(
@@ -289,22 +226,35 @@ const SentenceList = () => {
     );
   }, [backendCurrentSceneId, sentences]);
 
-  // Is the user currently viewing the sentence that matches backend progress?
   const isAtBackendCurrent = useMemo(() => {
     if (!backendCurrentSceneId || !current) return false;
     return resolveId(current.sceneId) === backendCurrentSceneId;
   }, [backendCurrentSceneId, current]);
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  const playAudio = useCallback((audioUrl) => {
+    if (!audioUrl) return;
+    if (!audioRef.current) {
+      audioRef.current = new Audio(audioUrl);
+    }
+    audioRef.current.src = audioUrl;
+    audioRef.current.currentTime = 0;
+    audioRef.current
+      .play()
+      .then(() => setPlayingAudio(true))
+      .catch(() => setPlayingAudio(false));
+    audioRef.current.onended = () => setPlayingAudio(false);
+  }, []);
+
+  useEffect(() => {
+    if (current?.audioUrl) {
+      playAudio(current.audioUrl);
+    }
+  }, [currentIndex, current?.audioUrl, playAudio]);
 
   const handleCompleteAndAdvance = useCallback(async () => {
-    // Prevent double-submit
     if (submittingRef.current) return;
     if (!languageId) return;
 
-    // If the user navigated backwards and is not on the backend's current
-    // scene, simply return them to the backend's current position without
-    // submitting another completion request.
     if (!isAtBackendCurrent) {
       if (backendCurrentIndex !== -1) {
         setCurrentIndex(backendCurrentIndex);
@@ -338,19 +288,16 @@ const SentenceList = () => {
           });
         }
 
-        // Check lesson completion from backend response
         const lessonCompleted =
           payload?.rewards?.lessonCompleted ||
           payload?.progress?.status === 'completed';
 
         if (lessonCompleted || isLast) {
-          // Refresh global reward/stats counters in navbar
           try {
             dispatch(fetchMyRewards());
             dispatch(fetchMyStats());
-          } catch (_e) { /* non-critical */ }
+          } catch (_e) {}
 
-          // Store pending character transition marker
           try {
             const pendingTransition = {
               completedLessonMasterId: String(lessonMasterId),
@@ -361,11 +308,10 @@ const SentenceList = () => {
               'pic2speak_pending_character_transition_v1',
               JSON.stringify(pendingTransition)
             );
-          } catch (_e) { /* non-critical */ }
+          } catch (_e) {}
 
           setIsModalOpen(true);
         } else {
-          // Navigate to the next scene from backend-confirmed response
           const nextSceneId = resolveId(payload?.progress?.currentSceneId);
           if (nextSceneId) {
             const nextIdx = sentences.findIndex(
@@ -381,8 +327,6 @@ const SentenceList = () => {
           }
         }
       } else {
-        // completeScene was rejected (e.g. 400 progress mismatch, concurrent request, etc.)
-        // ACTION: Fetch latest progress and synchronize the UI safely. Never retry old scene!
         try {
           const freshProgressAction = await dispatch(
             getLessonProgress({ lessonMasterId, languageId })
@@ -401,12 +345,9 @@ const SentenceList = () => {
               }
             }
           }
-        } catch (_fetchErr) {
-          // Non-critical background sync error
-        }
+        } catch (_fetchErr) {}
       }
     } catch (_error) {
-      // Network-level error — do not advance
     } finally {
       submittingRef.current = false;
     }
@@ -428,36 +369,23 @@ const SentenceList = () => {
     if (!isFirst) setCurrentIndex((i) => i - 1);
   }, [isFirst]);
 
-  const repeatAudioRef = useRef(null);
+  const displayTitle = lessonTitle || lessonSummary?.title || 'Lesson 1';
 
-  const handleRepeat = useCallback(() => {
-    if (!current?.audioUrl) return;
-    if (!repeatAudioRef.current) {
-      repeatAudioRef.current = new Audio(current.audioUrl);
-    }
-    repeatAudioRef.current.src = current.audioUrl;
-    repeatAudioRef.current.currentTime = 0;
-    repeatAudioRef.current.play().catch(() => {});
-  }, [current]);
-
-  const displayTitle = lessonTitle || lessonSummary?.title || 'Lesson';
-
-  // ── Blocked / empty states ─────────────────────────────────────────────────
   if (isAdminBlocked) {
     return (
       <div
-        className="flex items-center justify-center bg-slate-50 p-4 overflow-hidden"
+        className="flex items-center justify-center bg-[#0d0f1a] p-4 overflow-hidden text-white"
         style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
       >
-        <div className="max-w-md text-center bg-white rounded-2xl shadow-lg p-5 border border-amber-100">
+        <div className="max-w-md text-center bg-slate-900/90 rounded-2xl shadow-xl p-5 border border-amber-500/30">
           <span className="text-3xl block mb-2">🔒</span>
-          <h2 className="text-base font-bold text-slate-800 mb-1">Sentence Data Unavailable</h2>
-          <p className="text-slate-600 text-xs leading-relaxed mb-3">
+          <h2 className="text-base font-bold text-white mb-1">Sentence Data Unavailable</h2>
+          <p className="text-slate-400 text-xs leading-relaxed mb-3">
             The sentence/scene content API is restricted to admin accounts.
           </p>
           <button
             onClick={() => navigate('/adventure-map')}
-            className="px-4 py-1.5 bg-emerald-600 text-white font-bold rounded-xl text-xs hover:bg-emerald-700 transition-colors"
+            className="px-4 py-1.5 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-500 transition-colors"
           >
             ← Back to Map
           </button>
@@ -469,18 +397,18 @@ const SentenceList = () => {
   if (sceneContentStatus === 'succeeded' && totalSentences === 0) {
     return (
       <div
-        className="flex items-center justify-center bg-slate-50 p-4 overflow-hidden"
+        className="flex items-center justify-center bg-[#0d0f1a] p-4 overflow-hidden text-white"
         style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
       >
-        <div className="max-w-sm text-center bg-white rounded-2xl shadow-lg p-5">
+        <div className="max-w-sm text-center bg-slate-900/90 rounded-2xl shadow-xl p-5 border border-slate-800">
           <span className="text-3xl block mb-2">📭</span>
-          <h2 className="text-base font-bold text-slate-800 mb-1">No Sentences Yet</h2>
-          <p className="text-slate-500 text-xs mb-4">
+          <h2 className="text-base font-bold text-white mb-1">No Sentences Yet</h2>
+          <p className="text-slate-400 text-xs mb-4">
             No sentences available for this lesson in your selected language.
           </p>
           <button
             onClick={() => navigate('/adventure-map')}
-            className="px-4 py-1.5 bg-emerald-600 text-white font-bold rounded-xl text-xs hover:bg-emerald-700 transition-colors"
+            className="px-4 py-1.5 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-500 transition-colors"
           >
             ← Back to Map
           </button>
@@ -489,7 +417,6 @@ const SentenceList = () => {
     );
   }
 
-  // ── Wait until both scene content and progress are loaded and synchronized ──
   if (
     sceneContentStatus === 'loading' ||
     !isContentReady ||
@@ -498,36 +425,36 @@ const SentenceList = () => {
   ) {
     return (
       <div
-        className="flex items-center justify-center bg-slate-50 overflow-hidden"
+        className="flex items-center justify-center bg-[#0d0f1a] overflow-hidden"
         style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
       >
         <div className="text-center">
-          <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-slate-600 font-semibold text-xs">Loading lesson…</p>
+          <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-indigo-300 font-semibold text-xs">Loading lesson…</p>
         </div>
       </div>
     );
   }
 
-  // ── Main render ────────────────────────────────────────────────────────────
   return (
     <div
-      className="flex flex-col w-full bg-slate-50 overflow-hidden min-h-0"
+      className="flex flex-col w-full bg-[#0b0e1b] text-white overflow-hidden min-h-0 select-none"
       style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
     >
-      {/* Top Header */}
-      <header className="bg-white border-b border-slate-100 px-3 py-1.5 flex items-center gap-2 shrink-0">
+      {/* Compact Top Header */}
+      <header className="bg-[#121629]/90 backdrop-blur-md border-b border-indigo-950/50 px-2 py-1 flex items-center gap-1.5 shrink-0">
         <button
           onClick={() => navigate('/adventure-map')}
-          className="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors shrink-0 text-xs font-bold"
+          className="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 transition-colors shrink-0 text-[11px] font-bold text-slate-200 border border-slate-700/50"
           title="Back to Adventure Map"
         >
           ←
         </button>
 
-        <div className="min-w-0 shrink-0">
-          <h1 className="text-xs sm:text-sm font-black text-slate-800 truncate flex items-center gap-1">
-            {displayTitle} 🏠
+        <div className="min-w-0 shrink-0 flex items-center gap-1">
+          <span className="text-xs">📖</span>
+          <h1 className="text-[11px] sm:text-xs font-bold text-slate-100 truncate max-w-[120px] sm:max-w-none">
+            {displayTitle}
           </h1>
         </div>
 
@@ -539,106 +466,134 @@ const SentenceList = () => {
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="flex-1 flex flex-col justify-between p-1.5 sm:p-2 lg:p-3 min-h-0 overflow-hidden w-full">
+      {/* Main Container - Scrollable on small screens for multi-line stories */}
+      <main className="flex-1 flex flex-col lg:flex-row items-center justify-center p-2 lg:p-6 min-h-0 overflow-y-auto lg:overflow-hidden w-full max-w-7xl mx-auto gap-2 lg:gap-8">
         {current ? (
-          <div className="w-full h-full flex flex-col justify-between min-h-0 gap-1.5">
-            {/* Card */}
-            <div className="flex-1 flex flex-col lg:flex-row bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden min-h-0 w-full">
-              {/* Image */}
-              <div className="w-full lg:w-1/2 h-[45%] lg:h-full shrink-0 bg-slate-100 flex items-center justify-center overflow-hidden">
-                {current.imageUrl ? (
-                  <img
-                    src={current.imageUrl}
-                    alt="Scene"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-1 p-2 text-slate-400">
-                    <span className="text-3xl">🖼️</span>
-                    <p className="text-[10px] font-medium">No image available</p>
-                  </div>
-                )}
+          <>
+            {/* Image Container - Compact height for small screens */}
+            <div className="relative w-full lg:w-1/2 aspect-video max-h-[24vh] sm:max-h-[30vh] lg:max-h-[72vh] rounded-xl shadow-lg border border-indigo-500/25 overflow-hidden bg-slate-950 shrink-0 flex items-center justify-center">
+              {current.imageUrl ? (
+                <img
+                  src={current.imageUrl}
+                  alt="Scene"
+                  className="w-full h-full object-cover object-center"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-1 p-2 text-slate-500">
+                  <span className="text-2xl">🖼️</span>
+                  <p className="text-[10px] font-medium">No image available</p>
+                </div>
+              )}
+              <button className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/80 hover:text-red-400 hover:bg-black/60 transition-all text-xs">
+                ♡
+              </button>
+            </div>
+
+            {/* Story / Sentence Content Area - Scaled for multi-line support */}
+            <div className="w-full lg:w-1/2 flex flex-col justify-between h-full max-w-xl mx-auto gap-1.5 py-1">
+              <div className="hidden sm:flex justify-center lg:justify-start shrink-0">
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-950/80 via-purple-950/80 to-indigo-950/80 border border-indigo-500/40">
+                  <span className="text-indigo-400 text-[10px]">✨</span>
+                  <span className="text-[10px] font-bold tracking-wider text-indigo-200 uppercase">Speak & Learn</span>
+                </div>
               </div>
 
-              {/* Text, Audio & Buttons */}
-              <div className="w-full lg:w-1/2 flex-1 flex flex-col justify-between p-2.5 sm:p-4 lg:p-8 min-h-0 gap-1">
-                <div className="flex justify-end shrink-0">
-                  <button className="text-slate-300 hover:text-red-400 transition-colors text-base sm:text-xl">♡</button>
-                </div>
-
-                <div className="text-base sm:text-xl lg:text-3xl font-black text-slate-800 leading-snug text-center lg:text-left overflow-hidden my-auto max-h-[80px]">
+              {/* Text Card with internal scroll support for 3-4 lines */}
+              <div className="w-full bg-gradient-to-b from-[#151932]/90 to-[#101324]/90 rounded-xl border border-indigo-500/30 px-3 py-2 text-center shadow-lg relative overflow-y-auto max-h-[140px] shrink-0 flex items-center justify-center">
+                <p className="text-xs sm:text-base lg:text-xl font-bold text-white tracking-wide leading-relaxed">
                   {current.sentence}
+                </p>
+              </div>
+
+              {/* Compact Audio Wave & Play Button */}
+              <div className="flex items-center justify-center gap-2 shrink-0 my-0.5">
+                <div className="flex items-center gap-0.5 opacity-60 scale-90">
+                  {[3, 6, 10, 6, 12, 16, 9, 4, 13, 7, 3].map((h, i) => (
+                    <div
+                      key={`w1-${i}`}
+                      className="w-0.5 bg-indigo-400 rounded-full transition-all duration-300"
+                      style={{ height: `${playingAudio ? Math.max(3, h * 1.3) : h}px` }}
+                    />
+                  ))}
                 </div>
 
-                <div className="flex justify-center shrink-0 my-0.5">
-                  <AudioButton audioUrl={current.audioUrl} />
-                </div>
+                <button
+                  onClick={() => playAudio(current.audioUrl)}
+                  disabled={!current.audioUrl}
+                  className="relative group w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-teal-500 via-emerald-400 to-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Listen / Play Audio"
+                >
+                  <div className="absolute inset-0 rounded-full border border-white/40 animate-pulse pointer-events-none" />
+                  <span className="text-lg sm:text-xl text-slate-950 font-black ml-0.5">▶</span>
+                </button>
 
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={handleRepeat}
-                    disabled={!current.audioUrl}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <span className="text-xs sm:text-base">🎤</span>
-                    <div className="text-left leading-none">
-                      <p className="font-bold text-slate-700 text-xs sm:text-sm">Repeat</p>
-                      <p className="text-[9px] text-slate-500 hidden sm:block">Speak sentence</p>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (current.audioUrl) {
-                        const a = new Audio(current.audioUrl);
-                        a.play().catch(() => {});
-                      }
-                    }}
-                    disabled={!current.audioUrl}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <span className="text-xs sm:text-base">👂</span>
-                    <div className="text-left leading-none">
-                      <p className="font-bold text-slate-700 text-xs sm:text-sm">Listen</p>
-                      <p className="text-[9px] text-slate-500 hidden sm:block">Hear sentence</p>
-                    </div>
-                  </button>
+                <div className="flex items-center gap-0.5 opacity-60 scale-90">
+                  {[7, 13, 4, 9, 16, 12, 6, 10, 6, 3, 9].map((h, i) => (
+                    <div
+                      key={`w2-${i}`}
+                      className="w-0.5 bg-purple-400 rounded-full transition-all duration-300"
+                      style={{ height: `${playingAudio ? Math.max(3, h * 1.3) : h}px` }}
+                    />
+                  ))}
                 </div>
               </div>
-            </div>
 
-            {/* Navigation Buttons */}
-            <div className="flex items-center gap-2 shrink-0 w-full px-0.5">
-              <button
-                onClick={handlePrev}
-                disabled={isFirst}
-                className="flex items-center justify-center gap-1 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-              >
-                ← Previous
-              </button>
+              {/* Repeat & Listen Action Grid */}
+              <div className="grid grid-cols-2 gap-2 shrink-0">
+                <button
+                  onClick={() => playAudio(current.audioUrl)}
+                  disabled={!current.audioUrl}
+                  className="flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-slate-900/90 to-indigo-950/80 border border-indigo-500/30 rounded-xl hover:border-indigo-400/60 transition-all shadow-sm disabled:opacity-40 group"
+                >
+                  <span className="text-sm">🎙️</span>
+                  <div className="text-left leading-tight">
+                    <p className="font-bold text-slate-100 text-xs group-hover:text-indigo-300 transition-colors">Repeat</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={handleNext}
-                disabled={actionStatus === 'loading' || submittingRef.current}
-                className="flex-1 flex items-center justify-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs sm:text-sm transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span>
-                  {/* Show "Continue ➔" label when reviewing a previous sentence */}
-                  {!isAtBackendCurrent && backendCurrentSceneId
-                    ? 'Continue ➔'
-                    : actionStatus === 'loading' && isLast
-                    ? 'Completing...'
-                    : isLast
-                    ? '🎉 Finish Lesson'
-                    : 'Next Sentence ➔'}
-                </span>
-              </button>
+                <button
+                  onClick={() => playAudio(current.audioUrl)}
+                  disabled={!current.audioUrl}
+                  className="flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-slate-900/90 to-indigo-950/80 border border-indigo-500/30 rounded-xl hover:border-indigo-400/60 transition-all shadow-sm disabled:opacity-40 group"
+                >
+                  <span className="text-sm">🎧</span>
+                  <div className="text-left leading-tight">
+                    <p className="font-bold text-slate-100 text-xs group-hover:text-indigo-300 transition-colors">Listen</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Navigation Buttons */}
+              <div className="flex items-center gap-2 shrink-0 w-full pt-0.5">
+                <button
+                  onClick={handlePrev}
+                  disabled={isFirst}
+                  className="flex items-center justify-center px-3 py-2 bg-slate-900/80 border border-slate-700/60 rounded-xl font-bold text-xs text-slate-300 hover:bg-slate-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                >
+                  ← Prev
+                </button>
+
+                <button
+                  onClick={handleNext}
+                  disabled={actionStatus === 'loading' || submittingRef.current}
+                  className="flex-1 flex items-center justify-center py-2 bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-[0_0_15px_rgba(20,184,166,0.3)] disabled:opacity-50"
+                >
+                  <span>
+                    {!isAtBackendCurrent && backendCurrentSceneId
+                      ? 'Continue ➔'
+                      : actionStatus === 'loading' && isLast
+                      ? 'Completing...'
+                      : isLast
+                      ? '🎉 Finish >'
+                      : 'Next Sentence ➔'}
+                  </span>
+                </button>
+              </div>
             </div>
-          </div>
+          </>
         ) : (
           <div className="flex h-full items-center justify-center">
-            <p className="text-slate-500 font-semibold text-xs">
+            <p className="text-indigo-300 font-semibold text-xs">
               {sceneContentStatus === 'failed'
                 ? 'Failed to load sentences. Please try again.'
                 : 'Loading sentences…'}
