@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Stage, Layer, Image as KonvaImage, Rect, Text as KonvaText, Group, Line, Path, Arc, Circle, Star, Ellipse } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Rect, Text as KonvaText, Group, Line, Arc, Circle, Ellipse } from 'react-konva';
 import useImage from 'use-image';
 
 import {
@@ -73,7 +73,15 @@ const SUB_FONT = 11;
 const SUB_GAP = 3;
 const ACTION_H = 28;
 const ACTION_GAP = 8;
-const CARD_FONT_FAMILY = 'Fredoka, sans-serif';
+const CARD_FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+let cachedCardFontFamily = null;
+
+const getCardFontFamily = () => {
+  if (cachedCardFontFamily) return cachedCardFontFamily;
+  if (typeof window === 'undefined' || !document.body) return CARD_FONT_FALLBACK;
+  cachedCardFontFamily = window.getComputedStyle(document.body).fontFamily || CARD_FONT_FALLBACK;
+  return cachedCardFontFamily;
+};
 
 const STARTED_COUNT_KEYS = [
   'startedScenes',
@@ -152,7 +160,7 @@ const getMeasureContext = () => {
 const measureTextWidth = (text, fontSize, bold = true) => {
   const ctx = getMeasureContext();
   if (!ctx) return String(text).length * fontSize * 0.6;
-  ctx.font = `${bold ? 'bold ' : ''}${fontSize}px ${CARD_FONT_FAMILY}`;
+  ctx.font = `${bold ? 'bold ' : ''}${fontSize}px ${getCardFontFamily()}`;
   return ctx.measureText(text).width;
 };
 
@@ -230,8 +238,8 @@ const useFontsReady = () => {
     let cancelled = false;
     if (typeof document === 'undefined' || !document.fonts) return undefined;
     Promise.all([
-      document.fonts.load(`bold ${TITLE_FONT}px Fredoka`),
-      document.fonts.load(`${SUB_FONT}px Fredoka`),
+      document.fonts.load(`bold ${TITLE_FONT}px ${getCardFontFamily()}`),
+      document.fonts.load(`${SUB_FONT}px ${getCardFontFamily()}`),
     ])
       .catch(() => null)
       .then(() => document.fonts.ready)
@@ -509,139 +517,67 @@ const MoreLessonsComingSoon = ({ y, worldWidth = 800 }) => {
   );
 };
 
-const GlassSweep = ({ cardWidth, cardHeight, isHovered }) => {
-  const groupRef = useRef(null);
-  const rafRef = useRef(null);
+const LESSON_CARD_RADIUS = 18;
+const LESSON_STAR_CLIP = 'polygon(50% 0%, 65% 35%, 100% 50%, 65% 65%, 50% 100%, 35% 65%, 0% 50%, 35% 35%)';
+const LESSON_LOCK_PATH = 'M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Z M7 11V7a5 5 0 0 1 10 0v4';
+const LESSON_EASING = 'cubic-bezier(0.215, 0.61, 0.355, 1)';
 
-  useEffect(() => {
-    if (REDUCED_MOTION) return;
-    const DURATION = 1900;
-    const sweepW = cardWidth * 0.7;
-    const totalDist = cardWidth + sweepW;
-    let startTime = null;
+const LESSON_CARD_KEYFRAMES = `
+@keyframes lessonCardSweep {
+  from { transform: translateX(-100%) rotate(-22deg); }
+  to { transform: translateX(142.857%) rotate(-22deg); }
+}
+@keyframes lessonCardGlow {
+  from { opacity: 0.3; transform: translate(-50%, -50%) scale(0.92); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+}
+@keyframes lessonCardRing {
+  from { opacity: 0.8; transform: translate(-50%, -50%) scale(1, 1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(2.5, 2.6); }
+}
+@keyframes lessonCardTwinkle {
+  0%, 100% { opacity: 0.05; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.5); }
+}
+@keyframes lessonCardSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+`;
 
-    const tick = (timestamp) => {
-      if (!startTime) startTime = timestamp;
-      const elapsed = timestamp - startTime;
-      const progress = (elapsed % DURATION) / DURATION;
-      const pos = isHovered 
-        ? cardWidth - progress * totalDist 
-        : -sweepW + progress * totalDist;
-
-      if (groupRef.current) {
-        groupRef.current.x(pos);
-        groupRef.current.getLayer()?.batchDraw();
-      }
-
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [cardWidth, isHovered]);
-
-  if (REDUCED_MOTION) {
-    return (
-      <Rect
-        x={0}
-        y={0}
-        width={cardWidth * 0.35}
-        height={cardHeight}
-        fill="rgba(255,255,255,0.1)"
-        listening={false}
-      />
-    );
+const getLessonCardColors = (titleText, isUnlocked) => {
+  if (!isUnlocked) {
+    return { colorStart: '#1e293b', colorEnd: '#0f172a', glowColor: 'rgba(255, 255, 255, 0.1)' };
   }
-
-  return (
-    <Group ref={groupRef} listening={false}>
-      <Rect
-        x={0}
-        y={-cardHeight}
-        width={cardWidth * 0.7}
-        height={cardHeight * 3}
-        fill="rgba(255,255,255,0.13)"
-        rotation={-22}
-        listening={false}
-      />
-    </Group>
-  );
+  if (titleText.includes('HOME')) {
+    return { colorStart: '#064e3b', colorEnd: '#022c22', glowColor: 'rgba(16, 185, 129, 0.6)' };
+  }
+  if (titleText.includes('KITCHEN')) {
+    return { colorStart: '#0f766e', colorEnd: '#115e59', glowColor: 'rgba(20, 184, 166, 0.6)' };
+  }
+  return { colorStart: '#1e1b4b', colorEnd: '#0f172a', glowColor: 'rgba(99, 102, 241, 0.6)' };
 };
 
-const CircularProgressRing = ({ cx, cy, r, pct, isCompleted, progressText, glowColor, isUnlocked }) => {
-  const strokeW = 3.5;
-  const bgR = r;
-  const fgAngle = Math.min(pct / 100, 1) * 360;
+const getLessonCardGeometry = (item, activeLanguage, progress, isUnlocked) => {
+  const content = getItemContent(item, activeLanguage);
+  const titleText = content.title ? content.title.toUpperCase() : 'UNTITLED';
+  const lessonNumber = progress?.lessonOrder ?? item.order;
+  const subtitle = lessonNumber != null && lessonNumber !== '' ? `Lesson ${lessonNumber}` : '';
+  const layout = buildCardLayout(titleText, subtitle, isUnlocked);
 
-  const trackColor = 'rgba(255,255,255,0.12)';
-  const fillColor = isCompleted
-    ? '#10b981'
-    : isUnlocked
-      ? glowColor.replace('0.6', '0.9').replace('0.5', '0.9')
-      : 'rgba(255,255,255,0.35)';
-
-  return (
-    <Group x={cx} y={cy} listening={false}>
-      <Circle
-        radius={bgR}
-        stroke={trackColor}
-        strokeWidth={strokeW}
-        fill="transparent"
-        listening={false}
-      />
-      {fgAngle > 0 && (
-        <Arc
-          innerRadius={bgR - strokeW}
-          outerRadius={bgR}
-          angle={fgAngle}
-          rotation={-90}
-          fill={fillColor}
-          listening={false}
-        />
-      )}
-      {isCompleted ? (
-        <KonvaText
-          text="✓"
-          x={-r} y={-r * 0.38}
-          width={r * 2}
-          align="center"
-          fontSize={r * 0.8}
-          fontStyle="bold"
-          fill="#10b981"
-          fontFamily="Fredoka, sans-serif"
-          listening={false}
-        />
-      ) : progressText ? (
-        <KonvaText
-          text={progressText}
-          x={-r} y={-r * 0.32}
-          width={r * 2}
-          align="center"
-          fontSize={Math.max(7, r * 0.52)}
-          fontStyle="bold"
-          fill="rgba(255,255,255,0.85)"
-          fontFamily="Fredoka, sans-serif"
-          listening={false}
-        />
-      ) : null}
-    </Group>
+  const baseWidth = item.width || CARD_MIN_W;
+  const baseHeight = item.height || CARD_MIN_H;
+  const baseX = Math.max(0, Number(item.x) || 0);
+  const screenX = Math.min(
+    Math.max(0, baseX + (baseWidth - layout.cardWidth) / 2),
+    Math.max(0, WORLD_WIDTH - layout.cardWidth)
   );
+  const screenY = (Number(item.y) || 0) + (baseHeight - layout.cardHeight) / 2;
+
+  return { titleText, subtitle, screenX, screenY, ...layout };
 };
 
-const CardMagicBurst = ({ cardWidth, cardHeight, active }) => {
-  const groupRef = useRef(null);
-  const glowRef = useRef(null);
-  const ringRef = useRef(null);
-  const sparkleRefs = useRef([]);
-  const rafRef = useRef(null);
-  const startRef = useRef(null);
-
-  const cx = cardWidth / 2;
-  const cy = cardHeight / 2;
-
+const LessonCardMagicBurst = ({ cardWidth, cardHeight, scale }) => {
   const sparkles = useMemo(() => {
     const count = 15;
     return Array.from({ length: count }, (_, i) => {
@@ -649,438 +585,383 @@ const CardMagicBurst = ({ cardWidth, cardHeight, active }) => {
       const rx = cardWidth * (0.55 + (i % 3) * 0.12);
       const ry = cardHeight * (0.9 + (i % 3) * 0.2);
       return {
-        x: cx + Math.cos(angle) * rx,
-        y: cy + Math.sin(angle) * ry,
+        x: cardWidth / 2 + Math.cos(angle) * rx,
+        y: cardHeight / 2 + Math.sin(angle) * ry,
         size: 3 + (i % 3) * 1.5,
         phase: (i / count) * Math.PI * 2,
       };
     });
-  }, [cx, cy, cardWidth, cardHeight]);
+  }, [cardWidth, cardHeight]);
 
-  useEffect(() => {
-    if (!active || REDUCED_MOTION) return undefined;
-    startRef.current = null;
-
-    const tick = (timestamp) => {
-      if (!startRef.current) startRef.current = timestamp;
-      const elapsed = (timestamp - startRef.current) / 1000;
-
-      if (glowRef.current) {
-        const pulse = 0.65 + Math.sin(elapsed * 4) * 0.35;
-        glowRef.current.opacity(Math.max(0, pulse));
-        const s = 1 + Math.sin(elapsed * 3.2) * 0.08;
-        glowRef.current.scaleX(s);
-        glowRef.current.scaleY(s);
-      }
-      if (ringRef.current) {
-        const t = (elapsed % 1.5) / 1.5;
-        ringRef.current.radiusX(cardWidth * 0.3 + t * cardWidth * 0.45);
-        ringRef.current.radiusY(cardHeight * 0.5 + t * cardHeight * 0.8);
-        ringRef.current.opacity(Math.max(0, 0.8 * (1 - t)));
-      }
-      sparkleRefs.current.forEach((node, i) => {
-        if (!node) return;
-        const tw = 0.5 + Math.sin(elapsed * 5 + sparkles[i].phase) * 0.5;
-        node.opacity(tw);
-        const s = 0.7 + tw * 0.8;
-        node.scaleX(s);
-        node.scaleY(s);
-        node.rotation(elapsed * 60 * (i % 2 === 0 ? 1 : -1));
-      });
-
-      groupRef.current?.getLayer()?.batchDraw();
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [active, sparkles, cardWidth, cardHeight]);
-
-  if (!active) return null;
+  const centerLeft = (cardWidth / 2) * scale;
+  const centerTop = (cardHeight / 2) * scale;
 
   return (
-    <Group ref={groupRef} listening={false}>
-      <Ellipse
-        ref={glowRef}
-        x={cx}
-        y={cy}
-        radiusX={cardWidth * 0.65}
-        radiusY={cardHeight * 1.2}
-        fill="rgba(253, 230, 138, 0.85)"
-        shadowColor="#f59e0b"
-        shadowBlur={40}
-        opacity={0.8}
-        listening={false}
+    <>
+      <div
+        style={{
+          position: 'absolute',
+          left: centerLeft,
+          top: centerTop,
+          width: cardWidth * 1.3 * scale,
+          height: cardHeight * 2.4 * scale,
+          borderRadius: '50%',
+          background: 'rgba(253, 230, 138, 0.85)',
+          boxShadow: '0 0 40px #f59e0b',
+          animation: 'lessonCardGlow 1.6s ease-in-out infinite alternate',
+        }}
       />
-      <Ellipse
-        ref={ringRef}
-        x={cx}
-        y={cy}
-        radiusX={cardWidth * 0.3}
-        radiusY={cardHeight * 0.5}
-        stroke="#fbbf24"
-        strokeWidth={3}
-        opacity={0.8}
-        fill="transparent"
-        listening={false}
+      <div
+        style={{
+          position: 'absolute',
+          left: centerLeft,
+          top: centerTop,
+          width: cardWidth * 0.6 * scale,
+          height: cardHeight * scale,
+          boxSizing: 'border-box',
+          borderRadius: '50%',
+          border: '3px solid #fbbf24',
+          animation: 'lessonCardRing 1.5s linear infinite',
+        }}
       />
       {sparkles.map((sp, i) => (
-        <Star
+        <div
           key={i}
-          ref={(node) => { sparkleRefs.current[i] = node; }}
-          x={sp.x}
-          y={sp.y}
-          numPoints={4}
-          innerRadius={sp.size * 0.3}
-          outerRadius={sp.size}
-          fill="#fffbeb"
-          shadowColor="#fde68a"
-          shadowBlur={6}
-          opacity={0.9}
-          listening={false}
-        />
+          style={{
+            position: 'absolute',
+            left: (sp.x - sp.size) * scale,
+            top: (sp.y - sp.size) * scale,
+            width: sp.size * 2 * scale,
+            height: sp.size * 2 * scale,
+            filter: 'drop-shadow(0 0 3px #fde68a)',
+            animation: `lessonCardSpin 6s linear infinite${i % 2 === 0 ? '' : ' reverse'}`,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              background: '#fffbeb',
+              clipPath: LESSON_STAR_CLIP,
+              animation: 'lessonCardTwinkle 1.26s ease-in-out infinite',
+              animationDelay: `${-(sp.phase / (Math.PI * 2)) * 1.26}s`,
+            }}
+          />
+        </div>
       ))}
-    </Group>
+    </>
   );
 };
 
-const UserLessonCard = React.memo(({ item, activeLanguage, progress, isUnlocked: isUnlockedProp, onNodeClick, revealed = true, magicUnlock = false }) => {
-  const content = getItemContent(item, activeLanguage);
-  const isUnlocked = Boolean(isUnlockedProp);
-  const [isHovered, setIsHovered] = useState(false);
+const LessonCardHtml = React.memo(({ item, activeLanguage, progress, isUnlocked, revealed, isMagicTarget, scale, onNodeClick }) => {
   const fontsVersion = useFontsReady();
+  const [isHovered, setIsHovered] = useState(false);
 
-  const titleText = content.title ? content.title.toUpperCase() : 'UNTITLED';
-  const lessonNumber = progress?.lessonOrder ?? item.order;
-  const subtitle = lessonNumber != null && lessonNumber !== '' ? `Lesson ${lessonNumber}` : '';
-
-  const layout = useMemo(
-    () => buildCardLayout(titleText, subtitle, isUnlocked),
+  const geometry = useMemo(
+    () => getLessonCardGeometry(item, activeLanguage, progress, isUnlocked),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [titleText, subtitle, isUnlocked, fontsVersion]
+    [item, activeLanguage, progress, isUnlocked, fontsVersion]
   );
 
-  const { lines, cardWidth, cardHeight, titleAreaWidth, titleBlockHeight, contentHeight } = layout;
+  const {
+    titleText,
+    lines,
+    subtitle,
+    cardWidth,
+    cardHeight,
+    titleAreaWidth,
+    titleBlockHeight,
+    contentHeight,
+    screenX,
+    screenY,
+  } = geometry;
 
-  const baseWidth = item.width || CARD_MIN_W;
-  const baseHeight = item.height || CARD_MIN_H;
-  const baseX = Math.max(0, Number(item.x) || 0);
-  const screenX = Math.min(
-    Math.max(0, baseX + (baseWidth - cardWidth) / 2),
-    Math.max(0, WORLD_WIDTH - cardWidth)
-  );
-  const screenY = (Number(item.y) || 0) + (baseHeight - cardHeight) / 2;
+  const { colorStart, colorEnd, glowColor } = getLessonCardColors(titleText, isUnlocked);
+  const hovered = isHovered && isUnlocked;
 
-  const halfW = cardWidth / 2;
-  const halfH = cardHeight / 2;
-  const innerGroupRef = useRef(null);
-  const hasAnimatedRef = useRef(false);
-  const entranceRafRef = useRef(null);
-  const initialRevealedRef = useRef(revealed);
-
-  useLayoutEffect(() => {
-    const node = innerGroupRef.current;
-    if (!node) return;
-    if (REDUCED_MOTION || initialRevealedRef.current) {
-      hasAnimatedRef.current = true;
-      return;
-    }
-    node.x(halfW - 100);
-    node.opacity(0);
-    node.scaleX(0.92);
-    node.scaleY(0.92);
-    node.getLayer()?.batchDraw();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (REDUCED_MOTION) return undefined;
-    if (!revealed) return undefined;
-    if (hasAnimatedRef.current) return undefined;
-    hasAnimatedRef.current = true;
-
-    const node = innerGroupRef.current;
-    if (!node) return undefined;
-
-    const DURATION = 650;
-    const fromX = halfW - 100;
-    const toX = halfW;
-    const fromScale = 0.92;
-    const toScale = 1;
-    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-    let start = null;
-
-    const tick = (timestamp) => {
-      if (start === null) start = timestamp;
-      const t = Math.min((timestamp - start) / DURATION, 1);
-      const eased = easeOutCubic(t);
-      node.x(fromX + (toX - fromX) * eased);
-      node.opacity(eased);
-      const s = fromScale + (toScale - fromScale) * eased;
-      node.scaleX(s);
-      node.scaleY(s);
-      node.getLayer()?.batchDraw();
-      if (t < 1) {
-        entranceRafRef.current = requestAnimationFrame(tick);
-      } else {
-        entranceRafRef.current = null;
-      }
-    };
-    entranceRafRef.current = requestAnimationFrame(tick);
-
-    return () => {
-      if (entranceRafRef.current) {
-        cancelAnimationFrame(entranceRafRef.current);
-        entranceRafRef.current = null;
-      }
-    };
-  }, [revealed, halfW]);
-
-  useEffect(() => {
-    return () => {
-      if (entranceRafRef.current) cancelAnimationFrame(entranceRafRef.current);
-    };
-  }, []);
-
-  const completedScenes =
-    typeof progress?.completedScenes === 'number' ? progress.completedScenes : null;
-  const totalScenes =
-    typeof progress?.totalScenes === 'number' ? progress.totalScenes : null;
-
-  const hasProgress = progress != null;
-  const showProgress = hasProgress && totalScenes !== null && completedScenes !== null;
-
+  const completedScenes = typeof progress?.completedScenes === 'number' ? progress.completedScenes : null;
+  const totalScenes = typeof progress?.totalScenes === 'number' ? progress.totalScenes : null;
+  const showProgress = progress != null && totalScenes !== null && completedScenes !== null;
   const isCompleted = isLessonCompleted(progress);
-
   const pct = isCompleted
     ? 100
     : showProgress && totalScenes > 0
       ? Math.round((completedScenes / totalScenes) * 100)
       : 0;
-
   const progressText = showProgress ? `${completedScenes}/${totalScenes}` : null;
 
   const actionState = getLessonActionState(progress);
-  const actionLabel = ACTION_LABELS[actionState];
   const [actionColorTop, actionColorBottom] = ACTION_COLORS[actionState];
-
-  let colorStart = '#0f172a';
-  let colorEnd = '#020617';
-  let glowColor = 'rgba(56, 189, 248, 0.5)';
-
-  if (!isUnlocked) {
-    colorStart = '#1e293b';
-    colorEnd = '#0f172a';
-    glowColor = 'rgba(255, 255, 255, 0.1)';
-  } else if (titleText.includes('HOME')) {
-    colorStart = '#064e3b';
-    colorEnd = '#022c22';
-    glowColor = 'rgba(16, 185, 129, 0.6)';
-  } else if (titleText.includes('KITCHEN')) {
-    colorStart = '#0f766e';
-    colorEnd = '#115e59';
-    glowColor = 'rgba(20, 184, 166, 0.6)';
-  } else {
-    colorStart = '#1e1b4b';
-    colorEnd = '#0f172a';
-    glowColor = 'rgba(99, 102, 241, 0.6)';
-  }
-
-  const cardStroke = (isHovered && isUnlocked) ? glowColor : 'rgba(255,255,255,0.25)';
-  const radius = 18;
-
-  const ringCx = cardWidth - CARD_PAD_X - RING_D / 2;
-  const ringCy = CARD_PAD_Y + contentHeight / 2;
 
   const titleBlockY = CARD_PAD_Y + (contentHeight - titleBlockHeight) / 2;
   const titleTextHeight = lines.length * TITLE_FONT * TITLE_LINE_H;
+  const ringCx = cardWidth - CARD_PAD_X - RING_D / 2;
+  const ringCy = CARD_PAD_Y + contentHeight / 2;
+  const ringCircumference = 2 * Math.PI * (RING_R - 1.75);
+  const ringFill = isCompleted
+    ? '#10b981'
+    : isUnlocked
+      ? glowColor.replace('0.6', '0.9').replace('0.5', '0.9')
+      : 'rgba(255,255,255,0.35)';
 
-  const actionW = cardWidth - CARD_PAD_X * 2;
-  const actionY = cardHeight - CARD_PAD_Y - ACTION_H;
+  const gradientAngle = (Math.atan2(cardWidth, -cardHeight) * 180) / Math.PI;
+  const radiusPx = LESSON_CARD_RADIUS * scale;
 
-  const lockSvgPath = "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Z M7 11V7a5 5 0 0 1 10 0v4";
-
-  const setCursor = (e, value) => {
-    const container = e.target.getStage()?.container();
-    if (container) container.style.cursor = value;
+  const handleActivate = () => {
+    if (isUnlocked) onNodeClick?.(item);
   };
 
   return (
-    <Group
-      x={screenX}
-      y={screenY}
-      onClick={(e) => {
-        e.cancelBubble = true;
-        if (isUnlocked) onNodeClick?.(item);
-      }}
-      onTap={(e) => {
-        e.cancelBubble = true;
-        if (isUnlocked) onNodeClick?.(item);
-      }}
-      onMouseEnter={(e) => {
+    <div
+      role={isUnlocked ? 'button' : undefined}
+      tabIndex={isUnlocked ? 0 : -1}
+      aria-label={isUnlocked ? `${titleText} ${subtitle}`.trim() : undefined}
+      onClick={handleActivate}
+      onKeyDown={(e) => {
         if (!isUnlocked) return;
-        setIsHovered(true);
-        setCursor(e, 'pointer');
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onNodeClick?.(item);
+        }
       }}
-      onMouseLeave={(e) => {
-        if (!isUnlocked) return;
-        setIsHovered(false);
-        setCursor(e, 'default');
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        position: 'absolute',
+        left: Math.round(screenX * scale),
+        top: Math.round(screenY * scale),
+        width: Math.round(cardWidth * scale),
+        height: Math.round(cardHeight * scale),
+        opacity: revealed ? (isUnlocked ? 1 : 0.6) : 0,
+        transform: revealed ? 'none' : `translateX(${-100 * scale}px) scale(0.92)`,
+        transition: REDUCED_MOTION ? 'none' : `opacity 650ms ${LESSON_EASING}, transform 650ms ${LESSON_EASING}`,
+        pointerEvents: isUnlocked && revealed ? 'auto' : 'none',
+        cursor: isUnlocked ? 'pointer' : 'default',
+        userSelect: 'none',
+        WebkitTapHighlightColor: 'transparent',
       }}
-      opacity={isUnlocked ? 1 : 0.6}
     >
-      <CardMagicBurst cardWidth={cardWidth} cardHeight={cardHeight} active={magicUnlock} />
-      <Group
-        ref={innerGroupRef}
-        x={halfW}
-        y={halfH}
-        offsetX={halfW}
-        offsetY={halfH}
-        opacity={1}
-        scaleX={1}
-        scaleY={1}
+      {isMagicTarget && !REDUCED_MOTION ? (
+        <LessonCardMagicBurst cardWidth={cardWidth} cardHeight={cardHeight} scale={scale} />
+      ) : null}
+
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: radiusPx,
+          backgroundColor: colorEnd,
+          backgroundImage: `linear-gradient(${gradientAngle}deg, ${colorStart}, ${colorEnd})`,
+          boxShadow: hovered
+            ? `0 ${8 * scale}px ${24 * scale}px ${glowColor}`
+            : `0 ${4 * scale}px ${12 * scale}px rgba(0,0,0,0.4)`,
+        }}
       >
-        <Rect
-          width={cardWidth}
-          height={cardHeight}
-          cornerRadius={radius}
-          fill="transparent"
-          shadowColor={isHovered && isUnlocked ? glowColor : '#000000'}
-          shadowBlur={isHovered && isUnlocked ? 24 : 12}
-          shadowOpacity={isHovered && isUnlocked ? 0.6 : 0.4}
-          shadowOffsetY={isHovered && isUnlocked ? 8 : 4}
-          listening={false}
-        />
-        <Rect
-          width={cardWidth}
-          height={cardHeight}
-          cornerRadius={radius}
-          fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-          fillLinearGradientEndPoint={{ x: cardWidth, y: cardHeight }}
-          fillLinearGradientColorStops={[0, colorStart, 1, colorEnd]}
-          stroke={cardStroke}
-          strokeWidth={isHovered && isUnlocked ? 2 : 1.5}
-        />
-        <Rect
-          x={8} y={4}
-          width={cardWidth - 16}
-          height={cardHeight * 0.38}
-          cornerRadius={[radius - 4, radius - 4, 0, 0]}
-          fill="rgba(255,255,255,0.09)"
-          listening={false}
+        <div
+          style={{
+            position: 'absolute',
+            left: 8 * scale,
+            top: 4 * scale,
+            width: (cardWidth - 16) * scale,
+            height: cardHeight * 0.38 * scale,
+            borderRadius: `${(LESSON_CARD_RADIUS - 4) * scale}px ${(LESSON_CARD_RADIUS - 4) * scale}px 0 0`,
+            background: 'rgba(255,255,255,0.09)',
+          }}
         />
 
-        {isUnlocked && (
-          <Group
-            clipFunc={(ctx) => {
-              ctx.beginPath();
-              ctx.roundRect(0, 0, cardWidth, cardHeight, radius);
-              ctx.closePath();
-            }}
-          >
-            <GlassSweep cardWidth={cardWidth} cardHeight={cardHeight} isHovered={isHovered} />
-          </Group>
-        )}
-
-        <KonvaText
-          text={lines.join('\n')}
-          x={CARD_PAD_X}
-          y={titleBlockY}
-          width={titleAreaWidth}
-          height={titleTextHeight}
-          align="center"
-          wrap="none"
-          lineHeight={TITLE_LINE_H}
-          fontSize={TITLE_FONT}
-          fontStyle="bold"
-          fill="#ffffff"
-          fontFamily={CARD_FONT_FAMILY}
-          shadowColor="rgba(0,0,0,0.55)"
-          shadowBlur={3}
-          shadowOffsetY={1}
-          listening={false}
-        />
+        <div
+          style={{
+            position: 'absolute',
+            left: CARD_PAD_X * scale,
+            top: titleBlockY * scale,
+            width: titleAreaWidth * scale,
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+            color: '#ffffff',
+            fontFamily: 'inherit',
+            fontWeight: 700,
+            fontSize: Math.round(TITLE_FONT * scale),
+            lineHeight: TITLE_LINE_H,
+          }}
+        >
+          {lines.map((line, index) => (
+            <div key={index}>{line}</div>
+          ))}
+        </div>
 
         {subtitle ? (
-          <KonvaText
-            text={subtitle}
-            x={CARD_PAD_X}
-            y={titleBlockY + titleTextHeight + SUB_GAP}
-            width={titleAreaWidth}
-            align="center"
-            wrap="none"
-            fontSize={SUB_FONT}
-            fill="rgba(255,255,255,0.75)"
-            fontFamily={CARD_FONT_FAMILY}
-            listening={false}
-          />
+          <div
+            style={{
+              position: 'absolute',
+              left: CARD_PAD_X * scale,
+              top: (titleBlockY + titleTextHeight + SUB_GAP) * scale,
+              width: titleAreaWidth * scale,
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              color: 'rgba(255,255,255,0.75)',
+              fontFamily: 'inherit',
+              fontWeight: 400,
+              fontSize: Math.round(SUB_FONT * scale),
+              lineHeight: 1,
+            }}
+          >
+            {subtitle}
+          </div>
         ) : null}
 
-        {showProgress && (
-          <CircularProgressRing
-            cx={ringCx}
-            cy={ringCy}
-            r={RING_R}
-            pct={pct}
-            isCompleted={isCompleted}
-            progressText={progressText}
-            glowColor={glowColor}
-            isUnlocked={isUnlocked}
-          />
-        )}
+        {showProgress ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: (ringCx - RING_D / 2) * scale,
+              top: (ringCy - RING_D / 2) * scale,
+              width: RING_D * scale,
+              height: RING_D * scale,
+            }}
+          >
+            <svg
+              width={RING_D * scale}
+              height={RING_D * scale}
+              viewBox={`0 0 ${RING_D} ${RING_D}`}
+              style={{ position: 'absolute', left: 0, top: 0 }}
+            >
+              <circle
+                cx={RING_D / 2}
+                cy={RING_D / 2}
+                r={RING_R}
+                fill="none"
+                stroke="rgba(255,255,255,0.12)"
+                strokeWidth={3.5}
+              />
+              {pct > 0 ? (
+                <circle
+                  cx={RING_D / 2}
+                  cy={RING_D / 2}
+                  r={RING_R - 1.75}
+                  fill="none"
+                  stroke={ringFill}
+                  strokeWidth={3.5}
+                  strokeDasharray={`${(Math.min(pct, 100) / 100) * ringCircumference} ${ringCircumference}`}
+                  transform={`rotate(-90 ${RING_D / 2} ${RING_D / 2})`}
+                />
+              ) : null}
+            </svg>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontFamily: 'inherit',
+                fontWeight: 700,
+                lineHeight: 1,
+                fontSize: Math.round((isCompleted ? RING_R * 0.8 : Math.max(7, RING_R * 0.52)) * scale),
+                color: isCompleted ? '#10b981' : 'rgba(255,255,255,0.85)',
+              }}
+            >
+              {isCompleted ? '✓' : progressText}
+            </div>
+          </div>
+        ) : null}
 
-        {isUnlocked && (
-          <Group x={CARD_PAD_X} y={actionY} listening={false}>
-            <Rect
-              width={actionW}
-              height={ACTION_H}
-              cornerRadius={ACTION_H / 2}
-              fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-              fillLinearGradientEndPoint={{ x: 0, y: ACTION_H }}
-              fillLinearGradientColorStops={[0, actionColorTop, 1, actionColorBottom]}
-              stroke="rgba(255,255,255,0.35)"
-              strokeWidth={1}
-              shadowColor="#000000"
-              shadowBlur={6}
-              shadowOpacity={0.3}
-              shadowOffsetY={2}
-              listening={false}
-            />
-            <KonvaText
-              text={`${actionLabel} →`}
-              x={0}
-              y={0}
-              width={actionW}
-              height={ACTION_H}
-              align="center"
-              verticalAlign="middle"
-              wrap="none"
-              fontSize={14}
-              fontStyle="bold"
-              fill="#ffffff"
-              fontFamily={CARD_FONT_FAMILY}
-              listening={false}
-            />
-          </Group>
-        )}
-
-        {!isUnlocked && (
-          <Path
-            x={ringCx - 9}
-            y={ringCy - 9}
-            data={lockSvgPath}
+        {isUnlocked ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: CARD_PAD_X * scale,
+              top: (cardHeight - CARD_PAD_Y - ACTION_H) * scale,
+              width: (cardWidth - CARD_PAD_X * 2) * scale,
+              height: ACTION_H * scale,
+              boxSizing: 'border-box',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: (ACTION_H / 2) * scale,
+              background: `linear-gradient(180deg, ${actionColorTop}, ${actionColorBottom})`,
+              border: '1px solid rgba(255,255,255,0.35)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+              color: '#ffffff',
+              fontFamily: 'inherit',
+              fontWeight: 700,
+              fontSize: Math.round(14 * scale),
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {`${ACTION_LABELS[actionState]} →`}
+          </div>
+        ) : (
+          <svg
+            width={18 * scale}
+            height={18 * scale}
+            viewBox="0 0 24 24"
             fill="none"
-            stroke={showProgress ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.55)'}
-            strokeWidth={showProgress ? 1.6 : 1.8}
-            scaleX={0.75}
-            scaleY={0.75}
-            listening={false}
-          />
+            style={{
+              position: 'absolute',
+              left: (ringCx - 9) * scale,
+              top: (ringCy - 9) * scale,
+            }}
+          >
+            <path
+              d={LESSON_LOCK_PATH}
+              stroke={showProgress ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.55)'}
+              strokeWidth={showProgress ? 1.6 : 1.8}
+            />
+          </svg>
         )}
-      </Group>
-    </Group>
+
+        {isUnlocked ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              overflow: 'hidden',
+              borderRadius: radiusPx,
+              pointerEvents: 'none',
+            }}
+          >
+            {REDUCED_MOTION ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: cardWidth * 0.35 * scale,
+                    height: '100%',
+                    background: 'rgba(255,255,255,0.1)',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: -cardHeight * scale,
+                    width: cardWidth * 0.7 * scale,
+                    height: cardHeight * 3 * scale,
+                    background: 'rgba(255,255,255,0.13)',
+                    transformOrigin: '0 0',
+                    animation: 'lessonCardSweep 1.9s linear infinite',
+                    animationDirection: hovered ? 'reverse' : 'normal',
+                  }}
+                />
+              )}
+          </div>
+        ) : null}
+
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            boxSizing: 'border-box',
+            borderRadius: radiusPx,
+            border: `${(hovered ? 2 : 1.5) * scale}px solid ${hovered ? glowColor : 'rgba(255,255,255,0.25)'}`,
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
+    </div>
   );
 });
 
@@ -1271,6 +1152,10 @@ const CurrentLessonPanel = ({ currentLessonProgress, currentLessonMasterId, less
         <button
           onClick={() => {
             if (currentLessonMasterId) {
+              const scrollEl = document.querySelector('main');
+              if (scrollEl) {
+                sessionStorage.setItem('pic2speak_map_scroll_top', String(scrollEl.scrollTop));
+              }
               navigate(`/sentence-list/${currentLessonMasterId}`);
             }
           }}
@@ -1378,6 +1263,9 @@ const WhatsNextPanel = ({ languageMapProgress, currentLessonMasterId }) => {
   );
 };
 
+let _cachedLanguageLookup = null;
+const _lastProgressFetchMap = new Map();
+
 const AdventureMap = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -1457,8 +1345,8 @@ const AdventureMap = () => {
   }, []);
 
   const [containerWidth, setContainerWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 800));
-  const [languageDb, setLanguageDb] = useState({});
-  const [languageStatus, setLanguageStatus] = useState('loading');
+  const [languageDb, setLanguageDb] = useState(() => _cachedLanguageLookup || {});
+  const [languageStatus, setLanguageStatus] = useState(() => (_cachedLanguageLookup ? 'succeeded' : 'loading'));
   const [languageError, setLanguageError] = useState(null);
   const [initializationRetryKey, setInitializationRetryKey] = useState(0);
   const [initializedLanguage, setInitializedLanguage] = useState(null);
@@ -1473,10 +1361,15 @@ const AdventureMap = () => {
   const [viewportBounds, setViewportBounds] = useState(INITIAL_VIEWPORT_BOUNDS);
 
   useEffect(() => {
+    if (_cachedLanguageLookup && initializationRetryKey === 0) {
+      setLanguageDb(_cachedLanguageLookup);
+      setLanguageStatus('succeeded');
+      return undefined;
+    }
+
     let cancelled = false;
     setLanguageStatus('loading');
     setLanguageError(null);
-    setLanguageDb({});
 
     API.get('/languages', { timeout: 30000 })
       .then((res) => {
@@ -1486,6 +1379,7 @@ const AdventureMap = () => {
         }
         const lookup = {};
         res.data.data.forEach((lang) => { lookup[lang.code] = lang; });
+        _cachedLanguageLookup = lookup;
         setLanguageDb(lookup);
         setLanguageStatus('succeeded');
       })
@@ -1748,6 +1642,7 @@ const AdventureMap = () => {
     [mapData?.categoriesList, mapItems]
   );
 
+  // ✅ FIXED: Removed progressStatus, lessonUnlockStatus, characterProgressStatus from dependency array to prevent infinite loop
   useEffect(() => {
     if (languageStatus !== 'succeeded' || !resolvedLanguage) return;
     const langObj = languageDb[resolvedLanguage];
@@ -1758,12 +1653,35 @@ const AdventureMap = () => {
       return;
     }
     setRequestedDataKey(`${resolvedLanguage}:${initializationRetryKey}`);
+
+    const pendingTransition = typeof window !== 'undefined'
+      ? localStorage.getItem('pic2speak_pending_character_transition_v1')
+      : null;
+
+    const lastFetch = _lastProgressFetchMap.get(langObj._id);
+    const isProgressFresh =
+      !pendingTransition &&
+      initializationRetryKey === 0 &&
+      lastFetch &&
+      Date.now() - lastFetch < 60000;
+
+    if (isProgressFresh) {
+      return;
+    }
+
+    _lastProgressFetchMap.set(langObj._id, Date.now());
     dispatch(fetchLessonProgressSummary(langObj._id));
     dispatch(fetchLessonUnlocks(langObj._id));
     dispatch(fetchCharacterProgress(langObj._id));
     dispatch(fetchMyStats());
     dispatch(fetchMyRewards());
-  }, [resolvedLanguage, languageDb, languageStatus, initializationRetryKey, dispatch]);
+  }, [
+    resolvedLanguage,
+    languageDb,
+    languageStatus,
+    initializationRetryKey,
+    dispatch
+  ]);
 
   const itemsByCategory = useMemo(() => {
     const groups = {};
@@ -1885,7 +1803,12 @@ const AdventureMap = () => {
   const handleLessonCardClick = useCallback((item) => {
     const lessonMasterId = resolveLessonMasterId(item, progressSummary)
       || (typeof item?.order === 'number' && item.order > 0 ? lmIdByOrder[item.order] : null);
-    if (lessonMasterId) navigate(`/sentence-list/${lessonMasterId}`);
+    if (lessonMasterId) {
+      if (mainScrollRef.current) {
+        sessionStorage.setItem('pic2speak_map_scroll_top', String(mainScrollRef.current.scrollTop));
+      }
+      navigate(`/sentence-list/${lessonMasterId}`);
+    }
   }, [navigate, progressSummary, lmIdByOrder]);
 
   const currentLessonMapImage = useMemo(() => {
@@ -1932,10 +1855,33 @@ const AdventureMap = () => {
     return building.src || building.imageUrl || null;
   }, [currentLessonMasterId, languageMapProgress, progressSummary, mapItems]);
 
+  const getLessonCardState = (item) => {
+    const finalLmId = resolveLessonMasterId(item, progressSummary)
+      || (typeof item.order === 'number' && item.order > 0 ? lmIdByOrder[item.order] : null);
+
+    const progress = finalLmId ? progressByLessonMasterId[finalLmId] : undefined;
+    const unlockState = finalLmId ? lessonUnlockMap[finalLmId] : null;
+
+    const isBeingUnlocked = isTransitionActive && normalizeId(item.id) === normalizeId(targetCardId);
+    const isOrder1 = item.order === 1;
+    const isUnlocked = isOrder1
+      ? true
+      : (!isBeingUnlocked && unlockState?.unlocked === true);
+
+    const isMagicTarget = normalizeId(item.id) === normalizeId(magicUnlockCardId);
+
+    return {
+      progress,
+      isUnlocked: isUnlocked || isMagicTarget,
+      isMagicTarget,
+      revealed: REDUCED_MOTION || isBeingUnlocked || isMagicTarget || revealedCardIds.has(item.id),
+    };
+  };
+
   const metrics = getResponsiveLayoutMetrics(containerWidth);
   const scale = metrics.scale;
-  const stageWidth = metrics.containerWidth;
-  const stageHeight = visibleMapHeight * scale;
+  const stageWidth = Math.round(metrics.containerWidth);
+  const stageHeight = Math.round(visibleMapHeight * scale);
 
   const currentLessonIsUnlocked = Boolean(
     currentLessonCard && (
@@ -2110,7 +2056,29 @@ const AdventureMap = () => {
   const mapViewportError = !isMapInitialized ? initializationError : null;
   const mapViewportLoading = !isMapInitialized && !mapViewportError;
 
+  useEffect(() => {
+    return () => {
+      if (mainScrollRef.current) {
+        sessionStorage.setItem('pic2speak_map_scroll_top', String(mainScrollRef.current.scrollTop));
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialCameraApplied && !isTransitionActive && mainScrollRef.current) {
+      const saved = sessionStorage.getItem('pic2speak_map_scroll_top');
+      if (saved !== null) {
+        const topNum = parseFloat(saved);
+        if (!isNaN(topNum) && topNum > 0) {
+          mainScrollRef.current.scrollTop = topNum;
+        }
+      }
+    }
+  }, [initialCameraApplied, isTransitionActive]);
+
   const handleRetryInitialization = useCallback(() => {
+    _cachedLanguageLookup = null;
+    _lastProgressFetchMap.clear();
     setRequestedDataKey(null);
     setInitializedLanguage(null);
     setAssetState({ status: 'idle', error: null });
@@ -2186,10 +2154,10 @@ const AdventureMap = () => {
     ? customThemes[bgSections[bgSections.length - 1].themeKey]
     : null;
   const fallbackBgColor = lastSectionTheme?.color || '#071426';
-  const renderWindowTopPx = Math.max(0, Math.min(stageHeight, vpTop * scale));
+  const renderWindowTopPx = Math.round(Math.max(0, Math.min(stageHeight, vpTop * scale)));
   const renderWindowBottomPx = Math.max(
     renderWindowTopPx + 1,
-    Math.min(stageHeight, vpBottom * scale)
+    Math.round(Math.min(stageHeight, vpBottom * scale))
   );
   const renderStageHeight = Math.max(1, renderWindowBottomPx - renderWindowTopPx);
   const mapViewportHeight = stageHeight > 0
@@ -2200,6 +2168,7 @@ const AdventureMap = () => {
     <div className="flex flex-col lg:flex-row h-[calc(100dvh_-_var(--shell-top-h,0px)_-_var(--shell-bottom-h,0px))] lg:h-screen w-full bg-slate-100 text-slate-800 overflow-hidden font-sans">
       <main
         ref={mainScrollRef}
+        style={{ backgroundColor: fallbackBgColor }}
         className="flex-1 min-w-0 flex flex-col overflow-y-auto overflow-x-hidden overscroll-contain relative lg:h-full min-h-0"
       >
         <div className="flex-1 w-full px-0 pb-6 flex flex-col items-center">
@@ -2226,6 +2195,7 @@ const AdventureMap = () => {
                 <Stage
                   width={stageWidth}
                   height={renderStageHeight}
+                  pixelRatio={Math.max(window.devicePixelRatio || 1, 2)}
                   listening={true}
                   style={{ position: 'absolute', top: renderWindowTopPx, left: 0 }}
                 >
@@ -2315,35 +2285,6 @@ const AdventureMap = () => {
                                     />
                                 );
                               })}
-                            {catName === 'Lesson Cards' &&
-                              catItems.map((item) => {
-                                const finalLmId = resolveLessonMasterId(item, progressSummary)
-                                  || (typeof item.order === 'number' && item.order > 0 ? lmIdByOrder[item.order] : null);
-
-                                const progress = finalLmId ? progressByLessonMasterId[finalLmId] : undefined;
-                                const unlockState = finalLmId ? lessonUnlockMap[finalLmId] : null;
-
-                                const isBeingUnlocked = isTransitionActive && normalizeId(item.id) === normalizeId(targetCardId);
-                                const isOrder1 = item.order === 1;
-                                const isUnlocked = isOrder1
-                                  ? true
-                                  : (!isBeingUnlocked && unlockState?.unlocked === true);
-
-                                const isMagicTarget = normalizeId(item.id) === normalizeId(magicUnlockCardId);
-
-                                return (
-                                  <UserLessonCard
-                                    key={item.id}
-                                    item={item}
-                                    activeLanguage={resolvedLanguage}
-                                    progress={progress}
-                                    isUnlocked={isUnlocked || isMagicTarget}
-                                    revealed={REDUCED_MOTION || isBeingUnlocked || isMagicTarget || revealedCardIds.has(item.id)}
-                                    magicUnlock={isMagicTarget}
-                                    onNodeClick={handleLessonCardClick}
-                                  />
-                                );
-                              })}
                           </Group>
                         );
                       })}
@@ -2367,6 +2308,29 @@ const AdventureMap = () => {
               ) : (
                 <div className="flex h-96 items-center justify-center text-white font-bold text-center px-6">
                   Lessons are not available in this language yet.
+                </div>
+              )}
+
+              {!mapViewportError && !mapViewportLoading && visibleMapHeight > 0 && (
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                  <style>{LESSON_CARD_KEYFRAMES}</style>
+                  {(visibleItemsByCategory['Lesson Cards'] || []).map((item) => {
+                    const cardState = getLessonCardState(item);
+
+                    return (
+                      <LessonCardHtml
+                        key={item.id}
+                        item={item}
+                        activeLanguage={resolvedLanguage}
+                        progress={cardState.progress}
+                        isUnlocked={cardState.isUnlocked}
+                        revealed={cardState.revealed}
+                        isMagicTarget={cardState.isMagicTarget}
+                        scale={scale}
+                        onNodeClick={handleLessonCardClick}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -9,6 +9,15 @@ import 'react-toastify/dist/ReactToastify.css';
 import './index.css';
 import App from './App.jsx';
 import { store } from '../src/redux/Store.js';
+import { loadMapSnapshot } from './utils/mapCache.js';
+import { hydrateMapFromCache } from './redux/slices/adventureMapSlice.js';
+
+// Pre-hydrate published map snapshot from IndexedDB before initial render
+loadMapSnapshot().then((snapshot) => {
+  if (snapshot?.data) {
+    store.dispatch(hydrateMapFromCache(snapshot.data));
+  }
+}).catch(() => {});
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

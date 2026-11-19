@@ -1,12 +1,34 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api';
+import { saveMapSnapshot } from '../../utils/mapCache';
 
 export const fetchPublishedMap = createAsyncThunk(
   'adventureMap/fetchPublishedMap',
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
-      const res = await API.get('/adventure-map/published');
-      return res.data.data;
+      const state = getState().adventureMap;
+      const currentMap = state.publishedMap;
+      const headers = {};
+
+      if (currentMap?.publishedAt) {
+        const ver = new Date(currentMap.publishedAt).getTime().toString();
+        headers['If-None-Match'] = `W/"map-${ver}"`;
+      }
+
+      const res = await API.get('/adventure-map/published', {
+        headers,
+        validateStatus: (status) => status === 200 || status === 304
+      });
+
+      if (res.status === 304) {
+        return { data: currentMap, notModified: true };
+      }
+
+      const freshMap = res.data.data;
+      if (freshMap) {
+        saveMapSnapshot(freshMap).catch(() => {});
+      }
+      return { data: freshMap, notModified: false };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
@@ -104,6 +126,12 @@ const adventureMapSlice = createSlice({
   reducers: {
     clearAdventureMapError: (state) => {
       state.error = null;
+    },
+    hydrateMapFromCache: (state, action) => {
+      if (!state.publishedMap && action.payload) {
+        state.publishedMap = action.payload;
+        state.loading = false;
+      }
     }
   },
   extraReducers: (builder) => {
@@ -116,7 +144,15 @@ const adventureMapSlice = createSlice({
       })
       .addCase(fetchPublishedMap.fulfilled, (state, action) => {
         state.loading = false;
-        state.publishedMap = action.payload;
+        if (action.payload) {
+          if (action.payload.notModified) {
+            // Keep existing publishedMap
+          } else if (action.payload.data) {
+            state.publishedMap = action.payload.data;
+          } else {
+            state.publishedMap = action.payload;
+          }
+        }
       })
       .addCase(fetchPublishedMap.rejected, (state, action) => {
         state.loading = false;
@@ -190,5 +226,5 @@ const adventureMapSlice = createSlice({
   }
 });
 
-export const { clearAdventureMapError } = adventureMapSlice.actions;
+export const { clearAdventureMapError, hydrateMapFromCache } = adventureMapSlice.actions;
 export default adventureMapSlice.reducer;

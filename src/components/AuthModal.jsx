@@ -7,28 +7,24 @@ import { toast } from 'react-toastify';
 const AuthModal = ({ isOpen, onClose }) => {
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   
-  // Local state to track if we are in the middle of a login redirect
   const [isProcessing, setIsProcessing] = useState(
     sessionStorage.getItem('auth_processing') === 'true'
   );
 
   useEffect(() => {
-    // FIX: If modal is opened manually, reset the processing flag
     if (isOpen && !user && !isAuthenticated) {
       sessionStorage.removeItem('auth_processing');
       setIsProcessing(false);
     }
 
-    // If user successfully logs in, cleanup and close
     if (user || isAuthenticated) {
       sessionStorage.removeItem('auth_processing');
       setIsProcessing(false);
       onClose();
     }
-  }, [user, isAuthenticated, isOpen, onClose]);
+  }, [user, isAuthenticated, isOpen]);
 
   const handleLoginStart = () => {
-    // Set flag before redirect to prevent "flash/ghosting" on page reload
     sessionStorage.setItem('auth_processing', 'true');
     setIsProcessing(true);
     toast.info("Connecting to Google...", { autoClose: 1000 });
@@ -40,17 +36,12 @@ const AuthModal = ({ isOpen, onClose }) => {
     onClose();
   };
 
-  // The modal will only be hidden if:
-  // 1. It's not supposed to be open (isOpen is false)
-  // 2. User is already logged in / authenticated
-  // 3. We are currently processing a redirect (isProcessing is true)
   if (!isOpen || user || isAuthenticated || isProcessing) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl p-8 md:p-12 w-full max-w-md relative text-center shadow-2xl animate-in fade-in zoom-in duration-200">
         
-        {/* Close Button */}
         <button
           onClick={handleManualClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-2"
