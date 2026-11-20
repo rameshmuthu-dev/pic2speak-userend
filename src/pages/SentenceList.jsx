@@ -122,10 +122,20 @@ const SentenceList = () => {
     coinsGranted: false,
   });
   const [playingAudio, setPlayingAudio] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const loadedImageUrlsRef = useRef(new Set());
 
   const submittingRef = useRef(false);
   const progressSyncedRef = useRef(false);
   const audioRef = useRef(null);
+
+  const isLessonAlreadyCompleted = useMemo(() => {
+    return (
+      currentProgress?.status === 'completed' ||
+      lessonSummary?.completed === true ||
+      lessonSummary?.isCompleted === true
+    );
+  }, [currentProgress, lessonSummary]);
 
   const isContentReady = useMemo(() => {
     return (
@@ -189,9 +199,12 @@ const SentenceList = () => {
     if (progressSyncedRef.current) return;
     if (!isContentReady || !isProgressReady) return;
 
-    if (currentProgress.status === 'completed') {
+    if (isLessonAlreadyCompleted) {
       progressSyncedRef.current = true;
-      setIsModalOpen(true);
+      // Resume at the last sentence (e.g. 15/15) in review mode instead of resetting to 0
+      if (sentences.length > 0) {
+        setCurrentIndex(sentences.length - 1);
+      }
       return;
     }
 
@@ -208,7 +221,7 @@ const SentenceList = () => {
       }
     }
     progressSyncedRef.current = true;
-  }, [isContentReady, isProgressReady, sentences, currentProgress]);
+  }, [isContentReady, isProgressReady, sentences, currentProgress, isLessonAlreadyCompleted]);
 
   const totalSentences = sentences.length;
   const current = sentences[currentIndex] || null;
@@ -245,15 +258,73 @@ const SentenceList = () => {
     audioRef.current.onended = () => setPlayingAudio(false);
   }, []);
 
+  // Preload all lesson sentence images on mount to ensure zero blinking on Next/Prev
   useEffect(() => {
-    if (current?.audioUrl) {
+    if (!sentences || sentences.length === 0) return;
+    sentences.forEach((s) => {
+      if (s.imageUrl) {
+        const img = new Image();
+        img.src = s.imageUrl;
+        img.onload = () => {
+          loadedImageUrlsRef.current.add(s.imageUrl);
+        };
+      }
+    });
+  }, [sentences]);
+
+  // Track active sentence image load state
+  useEffect(() => {
+    if (!current?.imageUrl) {
+      setImageLoaded(true);
+      return;
+    }
+
+    if (loadedImageUrlsRef.current.has(current.imageUrl)) {
+      setImageLoaded(true);
+      return;
+    }
+
+    setImageLoaded(false);
+    const img = new Image();
+    img.src = current.imageUrl;
+    img.onload = () => {
+      loadedImageUrlsRef.current.add(current.imageUrl);
+      setImageLoaded(true);
+    };
+    img.onerror = () => {
+      setImageLoaded(true);
+    };
+  }, [currentIndex, current?.imageUrl]);
+
+  // Stop previous audio immediately when sentence index changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setPlayingAudio(false);
+    }
+  }, [currentIndex]);
+
+  // Play audio ONLY after the active sentence's image has loaded (eliminates race condition)
+  useEffect(() => {
+    if (imageLoaded && current?.audioUrl) {
       playAudio(current.audioUrl);
     }
-  }, [currentIndex, current?.audioUrl, playAudio]);
+  }, [currentIndex, imageLoaded, current?.audioUrl, playAudio]);
 
   const handleCompleteAndAdvance = useCallback(async () => {
     if (submittingRef.current) return;
     if (!languageId) return;
+
+    // Review mode navigation for already completed lessons
+    if (isLessonAlreadyCompleted) {
+      if (isLast) {
+        setIsModalOpen(true);
+      } else {
+        setCurrentIndex((i) => Math.min(i + 1, totalSentences - 1));
+      }
+      return;
+    }
 
     if (!isAtBackendCurrent) {
       if (backendCurrentIndex !== -1) {
