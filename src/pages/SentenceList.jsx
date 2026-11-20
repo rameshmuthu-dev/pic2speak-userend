@@ -199,7 +199,6 @@ const SentenceList = () => {
     if (progressSyncedRef.current) return;
     if (!isContentReady || !isProgressReady) return;
 
-    // ✅ FIXED: Completed lessons will now always start fresh from the very first sentence (Index 0) for review
     if (isLessonAlreadyCompleted) {
       progressSyncedRef.current = true;
       setCurrentIndex(0);
@@ -303,12 +302,19 @@ const SentenceList = () => {
     }
   }, [currentIndex]);
 
-  // ✅ FIXED: Play audio ONLY when scene content is successfully loaded and image has completely finished rendering
+  // ✅ STRICT GUARD: Play audio ONLY when loading spinner is completely gone, sync is finished, and image is loaded
   useEffect(() => {
-    if (sceneContentStatus === 'succeeded' && imageLoaded && current?.audioUrl) {
+    const isFullyLoaded =
+      sceneContentStatus === 'succeeded' &&
+      isContentReady &&
+      isProgressReady &&
+      progressSyncedRef.current &&
+      imageLoaded;
+
+    if (isFullyLoaded && current?.audioUrl) {
       playAudio(current.audioUrl);
     }
-  }, [currentIndex, imageLoaded, current?.audioUrl, playAudio, sceneContentStatus]);
+  }, [currentIndex, imageLoaded, current?.audioUrl, playAudio, sceneContentStatus, isContentReady, isProgressReady]);
 
   const handleCompleteAndAdvance = useCallback(async () => {
     if (submittingRef.current) return;
