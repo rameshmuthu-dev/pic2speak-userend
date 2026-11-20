@@ -199,12 +199,10 @@ const SentenceList = () => {
     if (progressSyncedRef.current) return;
     if (!isContentReady || !isProgressReady) return;
 
+    // ✅ FIXED: Completed lessons will now always start fresh from the very first sentence (Index 0) for review
     if (isLessonAlreadyCompleted) {
       progressSyncedRef.current = true;
-      // Resume at the last sentence (e.g. 15/15) in review mode instead of resetting to 0
-      if (sentences.length > 0) {
-        setCurrentIndex(sentences.length - 1);
-      }
+      setCurrentIndex(0);
       return;
     }
 
@@ -258,7 +256,7 @@ const SentenceList = () => {
     audioRef.current.onended = () => setPlayingAudio(false);
   }, []);
 
-  // Preload all lesson sentence images on mount to ensure zero blinking on Next/Prev
+  // Preload all lesson sentence images on mount
   useEffect(() => {
     if (!sentences || sentences.length === 0) return;
     sentences.forEach((s) => {
@@ -296,7 +294,7 @@ const SentenceList = () => {
     };
   }, [currentIndex, current?.imageUrl]);
 
-  // Stop previous audio immediately when sentence index changes
+  // Stop previous audio immediately when index changes
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -305,18 +303,17 @@ const SentenceList = () => {
     }
   }, [currentIndex]);
 
-  // Play audio ONLY after the active sentence's image has loaded (eliminates race condition)
+  // ✅ FIXED: Play audio ONLY when scene content is successfully loaded and image has completely finished rendering
   useEffect(() => {
-    if (imageLoaded && current?.audioUrl) {
+    if (sceneContentStatus === 'succeeded' && imageLoaded && current?.audioUrl) {
       playAudio(current.audioUrl);
     }
-  }, [currentIndex, imageLoaded, current?.audioUrl, playAudio]);
+  }, [currentIndex, imageLoaded, current?.audioUrl, playAudio, sceneContentStatus]);
 
   const handleCompleteAndAdvance = useCallback(async () => {
     if (submittingRef.current) return;
     if (!languageId) return;
 
-    // Review mode navigation for already completed lessons
     if (isLessonAlreadyCompleted) {
       if (isLast) {
         setIsModalOpen(true);
@@ -432,6 +429,7 @@ const SentenceList = () => {
     backendCurrentIndex,
     sentences,
     totalSentences,
+    isLessonAlreadyCompleted,
   ]);
 
   const handleNext = handleCompleteAndAdvance;
