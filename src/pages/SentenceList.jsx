@@ -199,9 +199,20 @@ const SentenceList = () => {
     if (progressSyncedRef.current) return;
     if (!isContentReady || !isProgressReady) return;
 
+    const storageKey = `pic2speak_review_index_${lessonMasterId}_${languageId}`;
+
     if (isLessonAlreadyCompleted) {
-      progressSyncedRef.current = true;
+      const savedReviewIdx = sessionStorage.getItem(storageKey);
+      if (savedReviewIdx !== null && !isNaN(savedReviewIdx)) {
+        const idx = parseInt(savedReviewIdx, 10);
+        if (idx < sentences.length) {
+          setCurrentIndex(idx);
+          progressSyncedRef.current = true;
+          return;
+        }
+      }
       setCurrentIndex(0);
+      progressSyncedRef.current = true;
       return;
     }
 
@@ -218,7 +229,14 @@ const SentenceList = () => {
       }
     }
     progressSyncedRef.current = true;
-  }, [isContentReady, isProgressReady, sentences, currentProgress, isLessonAlreadyCompleted]);
+  }, [isContentReady, isProgressReady, sentences, currentProgress, isLessonAlreadyCompleted, lessonMasterId, languageId]);
+
+  useEffect(() => {
+    if (isLessonAlreadyCompleted && sentences.length > 0) {
+      const storageKey = `pic2speak_review_index_${lessonMasterId}_${languageId}`;
+      sessionStorage.setItem(storageKey, currentIndex.toString());
+    }
+  }, [currentIndex, isLessonAlreadyCompleted, lessonMasterId, languageId, sentences.length]);
 
   const totalSentences = sentences.length;
   const current = sentences[currentIndex] || null;
@@ -255,7 +273,6 @@ const SentenceList = () => {
     audioRef.current.onended = () => setPlayingAudio(false);
   }, []);
 
-  // Preload all lesson sentence images on mount
   useEffect(() => {
     if (!sentences || sentences.length === 0) return;
     sentences.forEach((s) => {
@@ -269,7 +286,6 @@ const SentenceList = () => {
     });
   }, [sentences]);
 
-  // Track active sentence image load state
   useEffect(() => {
     if (!current?.imageUrl) {
       setImageLoaded(true);
@@ -293,7 +309,6 @@ const SentenceList = () => {
     };
   }, [currentIndex, current?.imageUrl]);
 
-  // Stop previous audio immediately when index changes
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -302,7 +317,6 @@ const SentenceList = () => {
     }
   }, [currentIndex]);
 
-  // ✅ STRICT GUARD: Play audio ONLY when loading spinner is completely gone, sync is finished, and image is loaded
   useEffect(() => {
     const isFullyLoaded =
       sceneContentStatus === 'succeeded' &&
@@ -516,7 +530,6 @@ const SentenceList = () => {
       className="flex flex-col w-full bg-[#0b0e1b] text-white overflow-hidden min-h-0 select-none"
       style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
     >
-      {/* Compact Top Header */}
       <header className="bg-[#121629]/90 backdrop-blur-md border-b border-indigo-950/50 px-2 py-1 flex items-center gap-1.5 shrink-0">
         <button
           onClick={() => navigate('/adventure-map')}
@@ -541,11 +554,9 @@ const SentenceList = () => {
         </div>
       </header>
 
-      {/* Main Container - Scrollable on small screens for multi-line stories */}
       <main className="flex-1 flex flex-col lg:flex-row items-center justify-center p-2 lg:p-6 min-h-0 overflow-y-auto lg:overflow-hidden w-full max-w-7xl mx-auto gap-2 lg:gap-8">
         {current ? (
           <>
-            {/* Image Container - Compact height for small screens */}
             <div className="relative w-full lg:w-1/2 aspect-video max-h-[24vh] sm:max-h-[30vh] lg:max-h-[72vh] rounded-xl shadow-lg border border-indigo-500/25 overflow-hidden bg-slate-950 shrink-0 flex items-center justify-center">
               {current.imageUrl ? (
                 <img
@@ -564,7 +575,6 @@ const SentenceList = () => {
               </button>
             </div>
 
-            {/* Story / Sentence Content Area - Scaled for multi-line support */}
             <div className="w-full lg:w-1/2 flex flex-col justify-between h-full max-w-xl mx-auto gap-1.5 py-1">
               <div className="hidden sm:flex justify-center lg:justify-start shrink-0">
                 <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-950/80 via-purple-950/80 to-indigo-950/80 border border-indigo-500/40">
@@ -573,14 +583,12 @@ const SentenceList = () => {
                 </div>
               </div>
 
-              {/* Text Card with internal scroll support for 3-4 lines */}
               <div className="w-full bg-gradient-to-b from-[#151932]/90 to-[#101324]/90 rounded-xl border border-indigo-500/30 px-3 py-2 text-center shadow-lg relative overflow-y-auto max-h-[140px] shrink-0 flex items-center justify-center">
                 <p className="text-xs sm:text-base lg:text-xl font-bold text-white tracking-wide leading-relaxed">
                   {current.sentence}
                 </p>
               </div>
 
-              {/* Compact Audio Wave & Play Button */}
               <div className="flex items-center justify-center gap-2 shrink-0 my-0.5">
                 <div className="flex items-center gap-0.5 opacity-60 scale-90">
                   {[3, 6, 10, 6, 12, 16, 9, 4, 13, 7, 3].map((h, i) => (
@@ -613,7 +621,6 @@ const SentenceList = () => {
                 </div>
               </div>
 
-              {/* Repeat & Listen Action Grid */}
               <div className="grid grid-cols-2 gap-2 shrink-0">
                 <button
                   onClick={() => playAudio(current.audioUrl)}
@@ -638,7 +645,6 @@ const SentenceList = () => {
                 </button>
               </div>
 
-              {/* Navigation Buttons */}
               <div className="flex items-center gap-2 shrink-0 w-full pt-0.5">
                 <button
                   onClick={handlePrev}

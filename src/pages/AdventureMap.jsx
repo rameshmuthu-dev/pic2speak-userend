@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -294,21 +294,21 @@ const normalizeId = (value) => {
 const resolveLessonMasterId = (card, progressSummary) => {
   const directId = [card?.lessonMasterId, card?.lessonMaster, card?.lessonId, card?.masterId]
     .map(normalizeId);
-  const summaryIds = new Set((progressSummary || []).map((entry) => normalizeId(entry.lessonMasterId)).filter(Boolean));
+  const summaryIds = new Set((progressSummary || []).map((entry) => normalizeId(entry?.lessonMasterId)).filter(Boolean));
   const knownDirectId = directId.find((id) => summaryIds.has(id));
   if (knownDirectId) return knownDirectId;
 
   if (typeof card?.order === 'number' && Array.isArray(progressSummary)) {
-    const record = progressSummary.find((entry) => Number(entry.lessonOrder) === Number(card.order));
+    const record = progressSummary.find((entry) => Number(entry?.lessonOrder) === Number(card.order));
     return normalizeId(record?.lessonMasterId);
   }
   return directId.find(Boolean) || null;
 };
 
 const getLanguageMapProgress = (items, lang) => {
-  const cards = items
-    .filter((item) => item.type === 'Lesson Cards')
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
+  const cards = (Array.isArray(items) ? items : [])
+    .filter((item) => item && item.type === 'Lesson Cards')
+    .sort((a, b) => (a?.order || 0) - (b?.order || 0));
   const visibleCards = [];
   for (const card of cards) {
     const content = getItemContent(card, lang);
@@ -1220,18 +1220,21 @@ const YourProgressPanel = ({ currentLessonProgress }) => {
 
 const WhatsNextPanel = ({ languageMapProgress, currentLessonMasterId }) => {
   const hasNextLesson = useMemo(() => {
-    const currentCardIndex = languageMapProgress.visibleCards.findIndex((card) => {
+    const cards = languageMapProgress?.visibleCards;
+    if (!Array.isArray(cards)) return false;
+    const currentCardIndex = cards.findIndex((card) => {
+      if (!card) return false;
       const candidates = [card.lessonMasterId, card.lessonMaster, card.lessonId, card.masterId];
       for (const val of candidates) {
-        const id = typeof val === 'object' ? val._id : val;
+        const id = typeof val === 'object' ? val?._id : val;
         if (id && String(id).trim() === currentLessonMasterId) {
           return true;
         }
       }
       return false;
     });
-    return currentCardIndex >= 0 && currentCardIndex < languageMapProgress.visibleCards.length - 1;
-  }, [languageMapProgress.visibleCards, currentLessonMasterId]);
+    return currentCardIndex >= 0 && currentCardIndex < cards.length - 1;
+  }, [languageMapProgress?.visibleCards, currentLessonMasterId]);
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 shrink-0">
@@ -1441,10 +1444,10 @@ const AdventureMap = () => {
 
   const progressByLessonMasterId = useMemo(() => {
     const map = {};
-    const sortedSummary = [...(progressSummary || [])].sort((a, b) => a.lessonOrder - b.lessonOrder);
+    const sortedSummary = [...(progressSummary || [])].sort((a, b) => (a?.lessonOrder ?? 0) - (b?.lessonOrder ?? 0));
 
     sortedSummary.forEach((rec) => {
-      const lmId = typeof rec.lessonMasterId === 'object' ? rec.lessonMasterId?._id : rec.lessonMasterId;
+      const lmId = typeof rec?.lessonMasterId === 'object' ? rec.lessonMasterId?._id : rec?.lessonMasterId;
       if (lmId) {
         map[String(lmId)] = {
           ...rec,
@@ -1457,8 +1460,8 @@ const AdventureMap = () => {
   const lmIdByOrder = useMemo(() => {
     const map = {};
     (progressSummary || []).forEach(rec => {
-      const lmId = typeof rec.lessonMasterId === 'object' ? rec.lessonMasterId?._id : rec.lessonMasterId;
-      if (lmId && rec.lessonOrder != null) {
+      const lmId = typeof rec?.lessonMasterId === 'object' ? rec.lessonMasterId?._id : rec?.lessonMasterId;
+      if (lmId && rec?.lessonOrder != null) {
         map[Number(rec.lessonOrder)] = String(lmId);
       }
     });
@@ -1488,7 +1491,8 @@ const AdventureMap = () => {
 
   const lessonBuildingStateByBuildingId = useMemo(() => {
     const map = {};
-    (languageMapProgress.visibleCards || []).forEach((card) => {
+    (languageMapProgress?.visibleCards || []).forEach((card) => {
+      if (!card) return;
       const buildingId = normalizeId(card.buildingId);
       if (!buildingId) return;
 
@@ -1512,7 +1516,7 @@ const AdventureMap = () => {
       };
     });
     return map;
-  }, [languageMapProgress.visibleCards, progressSummary, lmIdByOrder, lessonUnlockMap, magicUnlockCardId]);
+  }, [languageMapProgress?.visibleCards, progressSummary, lmIdByOrder, lessonUnlockMap, magicUnlockCardId]);
 
   useEffect(() => {
     if (!mapItems || mapItems.length === 0) return;
@@ -1541,7 +1545,7 @@ const AdventureMap = () => {
   );
 
   const userVisibleCards = useMemo(() => {
-    const published = languageMapProgress.visibleCards || [];
+    const published = languageMapProgress?.visibleCards || [];
     return published.filter((card) => {
       const content = getItemContent(card, resolvedLanguage);
       const title = String(content.title || '').trim();
@@ -1560,7 +1564,7 @@ const AdventureMap = () => {
       return isUnlocked || isTransitionTarget;
     });
   }, [
-    languageMapProgress.visibleCards,
+    languageMapProgress?.visibleCards,
     resolvedLanguage,
     progressSummary,
     lmIdByOrder,
@@ -1582,9 +1586,9 @@ const AdventureMap = () => {
 
   const allPublishedBuildingIds = useMemo(
     () => new Set(
-      (languageMapProgress.visibleCards || []).map((c) => normalizeId(c.buildingId)).filter(Boolean)
+      (languageMapProgress?.visibleCards || []).map((c) => normalizeId(c?.buildingId)).filter(Boolean)
     ),
-    [languageMapProgress.visibleCards]
+    [languageMapProgress?.visibleCards]
   );
 
   const lastVisibleCard = userVisibleCards.length > 0
@@ -1592,7 +1596,7 @@ const AdventureMap = () => {
     : null;
   void lastVisibleCard;
 
-  const allPublishedCards = languageMapProgress.visibleCards || [];
+  const allPublishedCards = languageMapProgress?.visibleCards || [];
   const lastPublishedCard = allPublishedCards.length > 0
     ? allPublishedCards[allPublishedCards.length - 1]
     : null;
@@ -1794,10 +1798,10 @@ const AdventureMap = () => {
   }, [characterProgress, characterProgressLoading]);
 
   const currentLessonCard = useMemo(
-    () => languageMapProgress.visibleCards.find(
+    () => (languageMapProgress?.visibleCards || []).find(
       (card) => resolveLessonMasterId(card, progressSummary) === currentLessonMasterId
     ) || null,
-    [currentLessonMasterId, languageMapProgress.visibleCards, progressSummary]
+    [currentLessonMasterId, languageMapProgress?.visibleCards, progressSummary]
   );
 
   const handleLessonCardClick = useCallback((item) => {
@@ -1812,7 +1816,7 @@ const AdventureMap = () => {
   }, [navigate, progressSummary, lmIdByOrder]);
 
   const currentLessonMapImage = useMemo(() => {
-    if (!currentLessonMasterId || !languageMapProgress.visibleCards) return null;
+    if (!currentLessonMasterId || !languageMapProgress?.visibleCards) return null;
 
     let lessonCard = null;
     for (const card of languageMapProgress.visibleCards) {
@@ -1853,14 +1857,14 @@ const AdventureMap = () => {
     if (!building) return null;
 
     return building.src || building.imageUrl || null;
-  }, [currentLessonMasterId, languageMapProgress, progressSummary, mapItems]);
+  }, [currentLessonMasterId, languageMapProgress?.visibleCards, progressSummary, mapItems]);
 
   const getLessonCardState = (item) => {
     const finalLmId = resolveLessonMasterId(item, progressSummary)
       || (typeof item.order === 'number' && item.order > 0 ? lmIdByOrder[item.order] : null);
 
     const progress = finalLmId ? progressByLessonMasterId[finalLmId] : undefined;
-    const unlockState = finalLmId ? lessonUnlockMap[finalLmId] : null;
+    const unlockState = (finalLmId && lessonUnlockMap) ? lessonUnlockMap[finalLmId] : null;
 
     const isBeingUnlocked = isTransitionActive && normalizeId(item.id) === normalizeId(targetCardId);
     const isOrder1 = item.order === 1;
@@ -1886,7 +1890,7 @@ const AdventureMap = () => {
   const currentLessonIsUnlocked = Boolean(
     currentLessonCard && (
       Number(currentLessonCard.order) === 1 ||
-      lessonUnlockMap[currentLessonMasterId]?.unlocked === true
+      lessonUnlockMap?.[currentLessonMasterId]?.unlocked === true
     )
   );
   const currentLessonBuilding = useMemo(
@@ -2202,10 +2206,13 @@ const AdventureMap = () => {
                   <Layer y={-renderWindowTopPx} name="background-layer" listening={false}>
                     <Rect x={0} y={0} width={stageWidth} height={renderStageHeight} fill={fallbackBgColor} listening={false} />
                     <Group scaleX={scale} scaleY={scale} listening={false}>
-                      {bgSections
+                      {(bgSections || [])
                         .filter(sec => {
-                          const secBottom = sec.y + sec.height;
-                          return secBottom >= vpTop && sec.y <= vpBottom;
+                          if (!sec) return false;
+                          const secY = Number(sec.y) || 0;
+                          const secH = Number(sec.height) || 800;
+                          const secBottom = secY + secH;
+                          return secBottom >= vpTop && secY <= vpBottom;
                         })
                         .map((sec) => (
                           <UserBackgroundSection key={sec.id} sec={sec} customThemes={customThemes} stageWidth={stageWidth} worldWidth={WORLD_WIDTH} visibleHeight={visibleMapHeight} />
@@ -2215,8 +2222,8 @@ const AdventureMap = () => {
 
                   <Layer y={-renderWindowTopPx} name="roads-layer" listening={false}>
                     <Group scaleX={scale} scaleY={scale} listening={false}>
-                      {roadPaths.map((path) => {
-                        if (!path.visible || path.points.length < 2) return null;
+                      {(roadPaths || []).map((path) => {
+                        if (!path || !path.visible || !Array.isArray(path.points) || path.points.length < 2) return null;
                         if (isTransitionActive && path.id === transitionTargetPosition?.roadId) {
                           return <UserRoadPath key={path.id} path={path} metrics={metrics} />;
                         }
@@ -2481,4 +2488,52 @@ const AdventureMap = () => {
   );
 };
 
-export default AdventureMap;
+class AdventureMapErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('AdventureMap runtime error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center bg-slate-900 text-white font-sans">
+          <div className="w-16 h-16 mb-4 rounded-full bg-red-500/20 flex items-center justify-center text-3xl">
+            ⚠️
+          </div>
+          <h2 className="text-xl font-bold mb-2">Something went wrong loading the map</h2>
+          <p className="text-sm text-slate-400 max-w-md mb-6">
+            An unexpected error occurred while rendering the adventure map.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              window.location.reload();
+            }}
+            className="rounded-full bg-teal-500 hover:bg-teal-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-colors cursor-pointer"
+          >
+            Reload Map
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const AdventureMapWithErrorBoundary = (props) => (
+  <AdventureMapErrorBoundary>
+    <AdventureMap {...props} />
+  </AdventureMapErrorBoundary>
+);
+
+export default AdventureMapWithErrorBoundary;

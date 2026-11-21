@@ -8,6 +8,8 @@ import AdventureMap from './pages/AdventureMap';
 const HomePage = lazy(() => import('./home/HomePage'));
 const ProtectedRoute = lazy(() => import('./components/ProtectedRoute'));
 const SentenceList = lazy(() => import('./pages/SentenceList'));
+const PlayHub = lazy(() => import('./pages/playhub/PlayHub'));
+const SentenceBuilder = lazy(() => import('./pages/playhub/games/SentenceBuilder'));
 
 function App() {
   const location = useLocation();
@@ -15,6 +17,8 @@ function App() {
 
   const isFullscreenPage =
     location.pathname === '/adventure-map' ||
+    location.pathname === '/play' ||
+    location.pathname === '/play/sentence-builder' ||
     location.pathname.startsWith('/sentence-list/');
 
   return (
@@ -29,6 +33,8 @@ function App() {
             />
             <Route element={<ProtectedRoute />}>
               <Route path="/adventure-map" element={<AdventureMap />} />
+              <Route path="/play" element={<PlayHub />} />
+              <Route path="/play/sentence-builder" element={<SentenceBuilder />} />
               <Route path="/sentence-list/:lessonMasterId" element={<SentenceList />} />
             </Route>
           </Routes>

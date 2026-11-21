@@ -84,7 +84,7 @@ const DotsNavIcon = ({ className = 'w-6 h-6' }) => (
   </svg>
 );
 
-const SHELL_ROUTES = ['/adventure-map', '/sentence-list'];
+const SHELL_ROUTES = ['/adventure-map', '/sentence-list', '/play'];
 const REDUCED_MOTION = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 const SHELL_CSS = `
@@ -109,7 +109,7 @@ const SHELL_CSS = `
 `;
 
 const MAP_NAV_ITEMS = [
-  { label: 'Play', icon: '🎮' },
+  { label: 'Play', icon: '🎮', path: '/play' },
   { label: 'Weekly Challenge', icon: '📅' },
   { label: 'My Progress', icon: '📊' },
   { label: 'Vocabulary', icon: '📗' },
@@ -117,7 +117,7 @@ const MAP_NAV_ITEMS = [
 ];
 
 const SHELL_NAV_ITEMS = [
-  { label: 'Play', icon: '🎮' },
+  { label: 'Play', icon: '🎮', path: '/play' },
   { label: 'Daily Challenge', icon: '📅' },
   { label: 'My Progress', icon: '📊' },
   { label: 'Vocabulary', icon: '📗' },
@@ -125,6 +125,7 @@ const SHELL_NAV_ITEMS = [
 ];
 
 const MORE_SHEET_ITEMS = [
+  { icon: '🎮', label: 'Play', path: '/play' },
   { icon: '📗', label: 'Vocabulary' },
   { icon: '⚙️', label: 'Settings' },
   { icon: '🔔', label: 'Notifications', badge: 3 },
@@ -380,8 +381,12 @@ const Navbar = ({ languageSelector = null }) => {
 
   const handleBottomNavClick = (id) => {
     if (id === 'map') goToMap();
+    if (id === 'play') navigate('/play');
     if (id === 'more') setShowMobileMore(true);
   };
+
+  const isPlayActive = location.pathname === '/play';
+  const isMapActive = location.pathname === '/adventure-map' || location.pathname.startsWith('/sentence-list');
 
   return (
     <>
@@ -460,14 +465,17 @@ const Navbar = ({ languageSelector = null }) => {
               </div>
 
               <nav className="shell-scroll flex flex-col gap-1.5 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-1">
-                <button onClick={goToMap} className="w-full flex items-center gap-3 px-3 py-2 shell-short-tight bg-cyan-950/80 text-cyan-300 font-bold rounded-xl transition-colors text-[13px] text-left cursor-pointer border-l-4 border-cyan-400 shadow-sm">
+                <button onClick={goToMap} className={`w-full flex items-center gap-3 px-3 py-2 shell-short-tight font-bold rounded-xl transition-colors text-[13px] text-left cursor-pointer shadow-sm ${isMapActive ? 'bg-cyan-950/80 text-cyan-300 border-l-4 border-cyan-400' : 'text-slate-300 hover:bg-[#121629] hover:text-cyan-400'}`}>
                   <span className="text-base">🗺️</span><span className="truncate">{mapTitle}</span>
                 </button>
-                {SHELL_NAV_ITEMS.map((navItem, i) => (
-                  <button key={i} className="w-full flex items-center gap-3 px-3 py-2 shell-short-tight text-slate-300 font-semibold rounded-xl hover:bg-[#121629] hover:text-cyan-400 transition-colors text-[13px] text-left cursor-pointer">
-                    <span className="text-base">{navItem.icon}</span><span>{navItem.label}</span>
-                  </button>
-                ))}
+                {SHELL_NAV_ITEMS.map((navItem, i) => {
+                  const isItemActive = navItem.path && location.pathname === navItem.path;
+                  return (
+                    <button key={i} onClick={() => { if (navItem.path) navigate(navItem.path); }} className={`w-full flex items-center gap-3 px-3 py-2 shell-short-tight font-semibold rounded-xl transition-colors text-[13px] text-left cursor-pointer ${isItemActive ? 'bg-cyan-950/80 text-cyan-300 border-l-4 border-cyan-400' : 'text-slate-300 hover:bg-[#121629] hover:text-cyan-400'}`}>
+                      <span className="text-base">{navItem.icon}</span><span>{navItem.label}</span>
+                    </button>
+                  );
+                })}
               </nav>
 
               <div className="pt-2.5 shrink-0 border-t border-indigo-950 bg-[#0b0e1b]">
@@ -512,7 +520,7 @@ const Navbar = ({ languageSelector = null }) => {
           <div ref={shellBottomRef} className="lg:hidden fixed bottom-0 inset-x-0 w-full bg-[#0b0e1b] text-white z-40 px-2 pt-1" style={{ paddingBottom: 'max(0.4rem, env(safe-area-inset-bottom))' }}>
             <nav className="flex items-stretch justify-between rounded-[24px] px-1 py-1 border-2 border-teal-400/40 bg-gradient-to-b from-[#0e2a45]/95 to-[#0a1530]/95 backdrop-blur-md shadow-[0_0_24px_rgba(45,212,191,0.3),inset_0_0_20px_rgba(45,212,191,0.06)]">
               {BOTTOM_NAV_ITEMS.map(({ id, label, Icon }) => {
-                const isActive = id === 'map';
+                const isActive = id === 'map' ? isMapActive : id === 'play' ? isPlayActive : false;
                 return (
                   <button key={id} type="button" onClick={() => handleBottomNavClick(id)} className="relative flex-1 flex flex-col items-center justify-center gap-0.5 pt-1 pb-2.5 bg-transparent border-0 cursor-pointer transition-transform active:scale-95">
                     <Icon className={`w-5 h-5 sm:w-6 sm:h-6 transition-all ${isActive ? 'text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.9)]' : 'text-indigo-200/85'}`} />
@@ -598,8 +606,13 @@ const Navbar = ({ languageSelector = null }) => {
               <button onClick={() => setShowMobileMore(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#121629] text-slate-300 font-bold">✕</button>
             </div>
             <div className="overflow-y-auto px-5 pb-10 flex flex-col gap-1 pt-2">
-              {MORE_SHEET_ITEMS.map(({ icon, label, badge }) => (
-                <div key={label} className="flex items-center justify-between py-3.5 border-b border-indigo-950/80 last:border-0">
+              {MORE_SHEET_ITEMS.map(({ icon, label, badge, path }) => (
+                <div key={label} onClick={() => {
+                  if (path) {
+                    setShowMobileMore(false);
+                    navigate(path);
+                  }
+                }} className="flex items-center justify-between py-3.5 border-b border-indigo-950/80 last:border-0 cursor-pointer">
                   <div className="flex items-center gap-4">
                     <span className="text-2xl w-7 text-center">{icon}</span>
                     <span className="font-bold text-slate-200 text-[15px]">{label}</span>
@@ -638,6 +651,7 @@ const Navbar = ({ languageSelector = null }) => {
                 {isAuthenticated && profileUser && (
                   <>
                     <NavLink to="/adventure-map" className={navLinkClass}>Adventure Map</NavLink>
+                    <NavLink to="/play" className={navLinkClass}>Play Hub</NavLink>
                     {languageSelector && (
                       <div className="shrink-0">{languageSelector}</div>
                     )}
@@ -653,7 +667,10 @@ const Navbar = ({ languageSelector = null }) => {
                       {showMoreDropdown && (
                         <div className="absolute right-0 mt-3 w-48 bg-[#0b0e1b] rounded-2xl shadow-2xl border border-indigo-950 py-2 z-50 animate-in fade-in slide-in-from-top-2">
                           {MAP_NAV_ITEMS.map((item) => (
-                            <button key={item.label} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-indigo-950/50 hover:text-cyan-400 transition-colors font-semibold text-left" onClick={() => setShowMoreDropdown(false)}>
+                            <button key={item.label} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-indigo-950/50 hover:text-cyan-400 transition-colors font-semibold text-left" onClick={() => {
+                              setShowMoreDropdown(false);
+                              if (item.path) navigate(item.path);
+                            }}>
                               <span>{item.icon}</span> {item.label}
                             </button>
                           ))}
@@ -721,9 +738,15 @@ const Navbar = ({ languageSelector = null }) => {
                   <NavLink to="/adventure-map" onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
                     🗺️ Adventure Map
                   </NavLink>
+                  <NavLink to="/play" onClick={() => setIsOpen(false)} className={mobileNavLinkClass}>
+                    🎮 Play Hub
+                  </NavLink>
                   <div className="flex flex-col gap-1 border-t border-indigo-950 pt-3">
                     {MAP_NAV_ITEMS.map((item) => (
-                      <button key={item.label} onClick={() => setIsOpen(false)} className="flex items-center gap-3 text-base font-semibold text-slate-300 hover:text-cyan-400 py-1.5 text-left w-full">
+                      <button key={item.label} onClick={() => {
+                        setIsOpen(false);
+                        if (item.path) navigate(item.path);
+                      }} className="flex items-center gap-3 text-base font-semibold text-slate-300 hover:text-cyan-400 py-1.5 text-left w-full">
                         <span>{item.icon}</span> {item.label}
                       </button>
                     ))}

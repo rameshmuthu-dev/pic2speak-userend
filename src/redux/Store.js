@@ -8,7 +8,8 @@ import lessonUnlockReducer from './slices/lessonUnlockSlice';
 import characterProgressReducer from './slices/characterProgressSlice';
 import userProgressReducer from './slices/userProgressSlice';
 import rewardReducer from './slices/rewardSlice';
-
+import playHubReducer from './slices/playHubSlice';
+import sentenceBuilderReducer from './slices/sentenceBuilderSlice';
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -20,5 +21,7 @@ export const store = configureStore({
     characterProgress: characterProgressReducer,
     userProgress: userProgressReducer,
     reward: rewardReducer,
+    playHub: playHubReducer,
+    sentenceBuilder: sentenceBuilderReducer,
   },
 });
