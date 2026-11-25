@@ -129,13 +129,12 @@ const SentenceList = () => {
   const [isAutoplayActive, setIsAutoplayActive] = useState(false);
   const [isShuffleActive, setIsShuffleActive] = useState(false);
   const [shuffledIndices, setShuffledIndices] = useState([]);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const loadedImageUrlsRef = useRef(new Set());
 
   const submittingRef = useRef(false);
   const progressSyncedRef = useRef(false);
   const audioRef = useRef(null);
   const autoplayTimerRef = useRef(null);
+  const initialAudioPlayedRef = useRef(false);
 
   useEffect(() => {
     if (!rawSentences.length) {
@@ -192,6 +191,7 @@ const SentenceList = () => {
 
   useEffect(() => {
     progressSyncedRef.current = false;
+    initialAudioPlayedRef.current = false;
     setCurrentIndex(0);
     dispatch(clearCurrentProgress());
     dispatch(clearSceneContents());
@@ -265,6 +265,11 @@ const SentenceList = () => {
     }
   }, [currentIndex, isLessonAlreadyCompleted, lessonMasterId, languageId, rawSentences.length]);
 
+  // Reset audio flag whenever currentIndex changes
+  useEffect(() => {
+    initialAudioPlayedRef.current = false;
+  }, [currentIndex]);
+
   const totalSentences = sentences.length;
   const current = sentences[currentIndex] || null;
   const isFirst = currentIndex === 0;
@@ -327,6 +332,7 @@ const SentenceList = () => {
         setIsModalOpen(true);
       } else {
         const nextIdx = Math.min(currentIndex + 1, totalSentences - 1);
+        initialAudioPlayedRef.current = false;
         setCurrentIndex(nextIdx);
         if (shouldPlayAudio && sentences[nextIdx]?.audioUrl) {
           playAudio(sentences[nextIdx].audioUrl);
@@ -336,6 +342,7 @@ const SentenceList = () => {
     }
 
     if (!isAtBackendCurrent && backendCurrentIndex !== -1) {
+      initialAudioPlayedRef.current = false;
       setCurrentIndex(backendCurrentIndex);
       if (shouldPlayAudio && sentences[backendCurrentIndex]?.audioUrl) {
         playAudio(sentences[backendCurrentIndex].audioUrl);
@@ -404,6 +411,7 @@ const SentenceList = () => {
               if (effIdx !== -1) nextIdx = effIdx;
             }
           }
+          initialAudioPlayedRef.current = false;
           setCurrentIndex(nextIdx);
           if (shouldPlayAudio && sentences[nextIdx]?.audioUrl) {
             playAudio(sentences[nextIdx].audioUrl);
@@ -411,6 +419,7 @@ const SentenceList = () => {
         }
       } else {
         const nextIdx = Math.min(currentIndex + 1, totalSentences - 1);
+        initialAudioPlayedRef.current = false;
         setCurrentIndex(nextIdx);
         if (shouldPlayAudio && sentences[nextIdx]?.audioUrl) {
           playAudio(sentences[nextIdx].audioUrl);
@@ -471,45 +480,10 @@ const SentenceList = () => {
     }
   }, [isAutoplayActive, playingAudio]);
 
-  useEffect(() => {
-    if (!rawSentences || rawSentences.length === 0) return;
-    rawSentences.forEach((s) => {
-      if (s.imageUrl) {
-        const img = new Image();
-        img.src = s.imageUrl;
-        img.onload = () => {
-          loadedImageUrlsRef.current.add(s.imageUrl);
-        };
-      }
-    });
-  }, [rawSentences]);
-
-  useEffect(() => {
-    if (!current?.imageUrl) {
-      setImageLoaded(true);
-      return;
-    }
-
-    if (loadedImageUrlsRef.current.has(current.imageUrl)) {
-      setImageLoaded(true);
-      return;
-    }
-
-    setImageLoaded(false);
-    const img = new Image();
-    img.src = current.imageUrl;
-    img.onload = () => {
-      loadedImageUrlsRef.current.add(current.imageUrl);
-      setImageLoaded(true);
-    };
-    img.onerror = () => {
-      setImageLoaded(true);
-    };
-  }, [currentIndex, current?.imageUrl]);
-
   const handleShuffleToggle = () => {
     const nextShuffleState = !isShuffleActive;
     setIsShuffleActive(nextShuffleState);
+    initialAudioPlayedRef.current = false;
     setCurrentIndex(0);
     if (isAutoplayActive) {
       setIsAutoplayActive(false);
@@ -560,6 +534,7 @@ const SentenceList = () => {
     }
     if (!isFirst) {
       const prevIdx = currentIndex - 1;
+      initialAudioPlayedRef.current = false;
       setCurrentIndex(prevIdx);
       if (sentences[prevIdx]?.audioUrl) {
         playAudio(sentences[prevIdx].audioUrl);
@@ -672,6 +647,13 @@ const SentenceList = () => {
                     src={current.imageUrl}
                     alt="Scene"
                     className="w-full h-full object-cover rounded-lg"
+                    onLoad={() => {
+                      // LOADING MUDINJI IMAGE RENDER AANA APROM MATTUM THAAN AUDIO PLAY AAGUM!
+                      if (!initialAudioPlayedRef.current && current?.audioUrl) {
+                        initialAudioPlayedRef.current = true;
+                        playAudio(current.audioUrl);
+                      }
+                    }}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full gap-1 p-2 text-slate-500">
