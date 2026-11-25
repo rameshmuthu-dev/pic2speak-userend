@@ -265,11 +265,6 @@ const SentenceList = () => {
     }
   }, [currentIndex, isLessonAlreadyCompleted, lessonMasterId, languageId, rawSentences.length]);
 
-  // Reset audio flag whenever currentIndex changes
-  useEffect(() => {
-    initialAudioPlayedRef.current = false;
-  }, [currentIndex]);
-
   const totalSentences = sentences.length;
   const current = sentences[currentIndex] || null;
   const isFirst = currentIndex === 0;
@@ -294,6 +289,12 @@ const SentenceList = () => {
   }, [backendCurrentSceneId, current]);
 
   const playAudio = useCallback((audioUrl, onEndedCallback) => {
+    // LOADING LA IRUKKUM POTHU AUDIO PLAY AAGAVE KODAATHU GUARD
+    if (sceneContentStatus !== 'succeeded' || !isContentReady) {
+      if (onEndedCallback) onEndedCallback();
+      return;
+    }
+
     if (!audioUrl) {
       if (onEndedCallback) onEndedCallback();
       return;
@@ -321,7 +322,21 @@ const SentenceList = () => {
         setPlayingAudio(false);
         if (onEndedCallback) onEndedCallback();
       });
-  }, []);
+  }, [sceneContentStatus, isContentReady]);
+
+  // STRICT ENTRY AUDIO TRIGGER: Fires ONLY when content status is strictly 'succeeded' and ready
+  useEffect(() => {
+    if (sceneContentStatus !== 'succeeded' || !isContentReady || !current?.audioUrl || initialAudioPlayedRef.current) return;
+
+    const timer = setTimeout(() => {
+      if (sceneContentStatus === 'succeeded' && isContentReady && !initialAudioPlayedRef.current && current?.audioUrl) {
+        initialAudioPlayedRef.current = true;
+        playAudio(current.audioUrl);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [sceneContentStatus, isContentReady, current?.audioUrl, currentIndex, playAudio]);
 
   const handleCompleteAndAdvance = useCallback(async (shouldPlayAudio = false) => {
     if (submittingRef.current) return;
@@ -647,13 +662,6 @@ const SentenceList = () => {
                     src={current.imageUrl}
                     alt="Scene"
                     className="w-full h-full object-cover rounded-lg"
-                    onLoad={() => {
-                      // LOADING MUDINJI IMAGE RENDER AANA APROM MATTUM THAAN AUDIO PLAY AAGUM!
-                      if (!initialAudioPlayedRef.current && current?.audioUrl) {
-                        initialAudioPlayedRef.current = true;
-                        playAudio(current.audioUrl);
-                      }
-                    }}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full gap-1 p-2 text-slate-500">
