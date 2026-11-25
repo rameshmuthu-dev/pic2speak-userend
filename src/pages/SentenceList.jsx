@@ -137,7 +137,6 @@ const SentenceList = () => {
   const audioRef = useRef(null);
   const autoplayTimerRef = useRef(null);
 
-  // Initialize or update shuffled indices whenever rawSentences change or shuffle toggles
   useEffect(() => {
     if (!rawSentences.length) {
       setShuffledIndices([]);
@@ -145,7 +144,6 @@ const SentenceList = () => {
     }
     const indices = rawSentences.map((_, i) => i);
     if (isShuffleActive) {
-      // Fisher-Yates shuffle
       for (let i = indices.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [indices[i], indices[j]] = [indices[j], indices[i]];
@@ -154,7 +152,6 @@ const SentenceList = () => {
     setShuffledIndices(indices);
   }, [rawSentences, isShuffleActive]);
 
-  // Effective sentences list based on shuffle state
   const sentences = useMemo(() => {
     if (!shuffledIndices.length) return rawSentences;
     return shuffledIndices.map((i) => rawSentences[i]);
@@ -175,14 +172,6 @@ const SentenceList = () => {
       String(sceneContentLangId) === String(languageId)
     );
   }, [sceneContentStatus, sceneContentLessonId, sceneContentLangId, lessonMasterId, languageId]);
-
-  const isProgressReady = useMemo(() => {
-    return (
-      currentProgress !== null &&
-      resolveId(currentProgress.lessonMasterId) === String(lessonMasterId) &&
-      resolveId(currentProgress.languageId) === String(languageId)
-    );
-  }, [currentProgress, lessonMasterId, languageId]);
 
   useEffect(() => {
     if (
@@ -233,7 +222,7 @@ const SentenceList = () => {
 
   useEffect(() => {
     if (progressSyncedRef.current) return;
-    if (!isContentReady || !isProgressReady) return;
+    if (!isContentReady || rawSentences.length === 0) return;
 
     const storageKey = `pic2speak_review_index_${lessonMasterId}_${languageId}`;
 
@@ -253,6 +242,7 @@ const SentenceList = () => {
     }
 
     if (
+      currentProgress &&
       currentProgress.status === 'in_progress' &&
       currentProgress.currentSceneId
     ) {
@@ -261,13 +251,12 @@ const SentenceList = () => {
         (s) => resolveId(s.sceneId) === backendSceneId
       );
       if (idx !== -1) {
-        // Find corresponding index in effective sentences
         const effectiveIdx = shuffledIndices.indexOf(idx);
         setCurrentIndex(effectiveIdx !== -1 ? effectiveIdx : 0);
       }
     }
     progressSyncedRef.current = true;
-  }, [isContentReady, isProgressReady, rawSentences, shuffledIndices, currentProgress, isLessonAlreadyCompleted, lessonMasterId, languageId]);
+  }, [isContentReady, rawSentences, shuffledIndices, currentProgress, isLessonAlreadyCompleted, lessonMasterId, languageId]);
 
   useEffect(() => {
     if (isLessonAlreadyCompleted && rawSentences.length > 0) {
@@ -346,12 +335,10 @@ const SentenceList = () => {
       return;
     }
 
-    if (!isAtBackendCurrent) {
-      if (backendCurrentIndex !== -1) {
-        setCurrentIndex(backendCurrentIndex);
-        if (shouldPlayAudio && sentences[backendCurrentIndex]?.audioUrl) {
-          playAudio(sentences[backendCurrentIndex].audioUrl);
-        }
+    if (!isAtBackendCurrent && backendCurrentIndex !== -1) {
+      setCurrentIndex(backendCurrentIndex);
+      if (shouldPlayAudio && sentences[backendCurrentIndex]?.audioUrl) {
+        playAudio(sentences[backendCurrentIndex].audioUrl);
       }
       return;
     }
@@ -423,31 +410,11 @@ const SentenceList = () => {
           }
         }
       } else {
-        try {
-          const freshProgressAction = await dispatch(
-            getLessonProgress({ lessonMasterId, languageId })
-          );
-          if (getLessonProgress.fulfilled.match(freshProgressAction)) {
-            const freshProgress = freshProgressAction.payload?.progress;
-            if (freshProgress?.status === 'completed') {
-              setIsModalOpen(true);
-            } else if (freshProgress?.currentSceneId) {
-              const freshSceneId = resolveId(freshProgress.currentSceneId);
-              const rawFreshIdx = rawSentences.findIndex(
-                (s) => resolveId(s.sceneId) === freshSceneId
-              );
-              if (rawFreshIdx !== -1) {
-                const effFreshIdx = shuffledIndices.indexOf(rawFreshIdx);
-                if (effFreshIdx !== -1) {
-                  setCurrentIndex(effFreshIdx);
-                  if (shouldPlayAudio && sentences[effFreshIdx]?.audioUrl) {
-                    playAudio(sentences[effFreshIdx].audioUrl);
-                  }
-                }
-              }
-            }
-          }
-        } catch (_fetchErr) {}
+        const nextIdx = Math.min(currentIndex + 1, totalSentences - 1);
+        setCurrentIndex(nextIdx);
+        if (shouldPlayAudio && sentences[nextIdx]?.audioUrl) {
+          playAudio(sentences[nextIdx].audioUrl);
+        }
       }
     } catch (_error) {
     } finally {
@@ -470,7 +437,6 @@ const SentenceList = () => {
     playAudio,
   ]);
 
-  // Autoplay Effect
   useEffect(() => {
     if (!isAutoplayActive || !sentences.length) return;
     const currentItem = sentences[currentIndex];
@@ -478,14 +444,7 @@ const SentenceList = () => {
 
     if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
 
-    const isFullyLoaded =
-      sceneContentStatus === 'succeeded' &&
-      isContentReady &&
-      isProgressReady &&
-      progressSyncedRef.current &&
-      imageLoaded;
-
-    if (isFullyLoaded) {
+    if (sceneContentStatus === 'succeeded' && isContentReady) {
       playAudio(currentItem.audioUrl, () => {
         if (!isAutoplayActive) return;
         autoplayTimerRef.current = setTimeout(() => {
@@ -496,14 +455,14 @@ const SentenceList = () => {
             setIsAutoplayActive(false);
             handleCompleteAndAdvance(false);
           }
-        }, 1600); // 1.6s delay after full audio finishes
+        }, 1600);
       });
     }
 
     return () => {
       if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
     };
-  }, [currentIndex, isAutoplayActive, sentences, imageLoaded, sceneContentStatus, isContentReady, isProgressReady, isLast, playAudio, handleCompleteAndAdvance]);
+  }, [currentIndex, isAutoplayActive, sentences, sceneContentStatus, isContentReady, isLast, playAudio, handleCompleteAndAdvance]);
 
   useEffect(() => {
     if (isAutoplayActive) return;
@@ -551,7 +510,7 @@ const SentenceList = () => {
   const handleShuffleToggle = () => {
     const nextShuffleState = !isShuffleActive;
     setIsShuffleActive(nextShuffleState);
-    setCurrentIndex(0); // Reset to beginning of shuffled/normal order
+    setCurrentIndex(0);
     if (isAutoplayActive) {
       setIsAutoplayActive(false);
       if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
@@ -659,8 +618,7 @@ const SentenceList = () => {
   if (
     sceneContentStatus === 'loading' ||
     !isContentReady ||
-    !isProgressReady ||
-    !progressSyncedRef.current
+    sentences.length === 0
   ) {
     return (
       <div
@@ -707,7 +665,7 @@ const SentenceList = () => {
       <main className="flex-1 flex flex-col items-center justify-between p-2 sm:p-3 overflow-hidden w-full max-w-3xl mx-auto gap-1 bg-[#0b0e1b]">
         {current ? (
           <>
-            <div className="w-full aspect-video max-h-[32vh] flex items-center justify-center bg-[#121629]/50 rounded-xl p-1 border border-indigo-900/40 shrink-0 overflow-hidden shadow-lg">
+            <div className="w-full aspect-video flex items-center justify-center bg-[#121629]/50 rounded-xl p-1 border border-indigo-900/40 shrink-0 overflow-hidden shadow-lg">
               <div className="relative w-full h-full rounded-lg overflow-hidden bg-black flex items-center justify-center">
                 {current.imageUrl ? (
                   <img
