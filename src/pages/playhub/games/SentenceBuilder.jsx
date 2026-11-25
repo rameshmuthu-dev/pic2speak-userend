@@ -58,6 +58,7 @@ const SentenceBuilder = () => {
   const [streak, setStreak] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isAutoAdvancing, setIsAutoAdvancing] = useState(false);
   const [mobileHeight, setMobileHeight] = useState(null);
   const [lockedNotice, setLockedNotice] = useState(false);
   const audioRef = useRef(null);
@@ -70,15 +71,18 @@ const SentenceBuilder = () => {
     const previousHtmlOverflow = html.style.overflow;
     const previousBodyOverflow = body.style.overflow;
     const previousBodyHeight = body.style.height;
+    const previousBodyBg = body.style.backgroundColor;
 
     html.style.overflow = 'hidden';
     body.style.overflow = 'hidden';
     body.style.height = '100%';
+    body.style.backgroundColor = '#0b0e1b';
 
     return () => {
       html.style.overflow = previousHtmlOverflow;
       body.style.overflow = previousBodyOverflow;
       body.style.height = previousBodyHeight;
+      body.style.backgroundColor = previousBodyBg;
     };
   }, []);
 
@@ -228,6 +232,7 @@ const SentenceBuilder = () => {
       setWordBank([]);
       setPlacedWords([]);
       setValidationState(null);
+      setIsAutoAdvancing(false);
       return;
     }
 
@@ -246,6 +251,7 @@ const SentenceBuilder = () => {
     setWordBank(shuffled);
     setPlacedWords([]);
     setValidationState(null);
+    setIsAutoAdvancing(false);
   }, [currentSentenceIndex, currentSentence]);
 
   const handlePickWord = (wordObj) => {
@@ -269,8 +275,11 @@ const SentenceBuilder = () => {
     setValidationState(null);
   };
 
-  const playAudio = useCallback(() => {
-    if (!currentSentence?.audioUrl) return;
+  const playAudio = useCallback((onEndedCallback) => {
+    if (!currentSentence?.audioUrl) {
+      if (onEndedCallback) onEndedCallback();
+      return;
+    }
     if (!audioRef.current) {
       audioRef.current = new Audio(currentSentence.audioUrl);
     } else {
@@ -278,18 +287,26 @@ const SentenceBuilder = () => {
     }
     audioRef.current.currentTime = 0;
     setIsPlayingAudio(true);
+    
+    audioRef.current.onended = () => {
+      setIsPlayingAudio(false);
+      if (onEndedCallback) onEndedCallback();
+    };
+
     audioRef.current
       .play()
       .then(() => setIsPlayingAudio(true))
-      .catch(() => setIsPlayingAudio(false));
-    audioRef.current.onended = () => setIsPlayingAudio(false);
+      .catch(() => {
+        setIsPlayingAudio(false);
+        if (onEndedCallback) onEndedCallback();
+      });
   }, [currentSentence?.audioUrl]);
 
   const cleanToken = (str) =>
     str ? str.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'–—]/g, '').trim().toLowerCase() : '';
 
   const handleCheckAnswer = () => {
-    if (placedWords.length === 0 || validationState === 'correct') return;
+    if (placedWords.length === 0 || validationState === 'correct' || isAutoAdvancing) return;
 
     const userText = placedWords.map((w) => cleanToken(w.text)).join(' ');
     const targetText = currentSentence.sentence.trim().split(/\s+/).map(cleanToken).join(' ');
@@ -298,37 +315,32 @@ const SentenceBuilder = () => {
       setValidationState('correct');
       setScore((s) => s + 10);
       setStreak((st) => st + 1);
+      setIsAutoAdvancing(true);
 
-      playAudio();
       try {
         confetti({ particleCount: 45, spread: 60, origin: { y: 0.7 } });
       } catch {}
 
-      if (languageId && activeLessonId) {
-        const nextIdx = currentSentenceIndex < sentences.length - 1 ? currentSentenceIndex + 1 : currentSentenceIndex;
-        dispatch(saveSentenceBuilderProgress({ languageId, lessonMasterId: activeLessonId, currentSentenceIndex: nextIdx }));
-      }
+      playAudio(() => {
+        if (currentSentenceIndex < sentences.length - 1) {
+          const nextIdx = currentSentenceIndex + 1;
+          setCurrentSentenceIndex(nextIdx);
+          if (languageId && activeLessonId) {
+            dispatch(saveSentenceBuilderProgress({ languageId, lessonMasterId: activeLessonId, currentSentenceIndex: nextIdx }));
+          }
+        } else {
+          setIsGameOver(true);
+          if (languageId && activeLessonId) {
+            dispatch(saveSentenceBuilderProgress({ languageId, lessonMasterId: activeLessonId, currentSentenceIndex: 0 }));
+          }
+          try {
+            confetti({ particleCount: 120, spread: 100, origin: { y: 0.6 } });
+          } catch {}
+        }
+      });
     } else {
       setValidationState('incorrect');
       setStreak(0);
-    }
-  };
-
-  const handleNextSentence = () => {
-    if (currentSentenceIndex < sentences.length - 1) {
-      const nextIdx = currentSentenceIndex + 1;
-      setCurrentSentenceIndex(nextIdx);
-      if (languageId && activeLessonId) {
-        dispatch(saveSentenceBuilderProgress({ languageId, lessonMasterId: activeLessonId, currentSentenceIndex: nextIdx }));
-      }
-    } else {
-      setIsGameOver(true);
-      if (languageId && activeLessonId) {
-        dispatch(saveSentenceBuilderProgress({ languageId, lessonMasterId: activeLessonId, currentSentenceIndex: 0 }));
-      }
-      try {
-        confetti({ particleCount: 120, spread: 100, origin: { y: 0.6 } });
-      } catch {}
     }
   };
 
@@ -339,7 +351,7 @@ const SentenceBuilder = () => {
       style={mobileHeight ? { height: mobileHeight, maxHeight: mobileHeight } : undefined}
     >
       {view === 'lesson_picker' && (
-        <div className="flex-1 min-h-0 flex flex-col max-w-5xl w-full mx-auto px-4 py-6 overflow-y-auto relative">
+        <div className="flex-1 min-h-0 flex flex-col max-w-5xl w-full mx-auto px-4 py-6 overflow-y-auto relative bg-[#0b0e1b]">
           <div className="flex items-center justify-between mb-6">
             <button
               onClick={() => navigate('/play')}
@@ -474,8 +486,8 @@ const SentenceBuilder = () => {
       )}
 
       {view === 'game' && (
-        <div className="flex-1 min-h-0 flex flex-col max-w-7xl w-full mx-auto px-3 lg:px-4 py-1.5 lg:py-3 overflow-hidden justify-between">
-          <div className="flex items-center justify-between gap-3 mb-1.5 lg:mb-3 shrink-0">
+        <div className="flex-1 min-h-0 flex flex-col max-w-7xl w-full mx-auto px-2.5 sm:px-4 py-1 sm:py-3 overflow-hidden justify-between bg-[#0b0e1b]">
+          <div className="flex items-center justify-between gap-2 mb-1 sm:mb-3 shrink-0">
             <button
               onClick={handleBackToPicker}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121629] hover:bg-[#1a213b] border border-indigo-900/60 text-slate-300 text-xs font-bold transition-all cursor-pointer"
@@ -484,7 +496,7 @@ const SentenceBuilder = () => {
               <span>Lessons</span>
             </button>
 
-            <div className="flex-1 max-w-md mx-4">
+            <div className="flex-1 max-w-md mx-3">
               <div className="w-full bg-[#121629] rounded-full h-1.5 overflow-hidden border border-indigo-950">
                 <div
                   className="bg-gradient-to-r from-teal-400 to-cyan-400 h-full rounded-full transition-all duration-300"
@@ -495,13 +507,13 @@ const SentenceBuilder = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-950/50 border border-indigo-800/40 text-amber-300 text-xs font-black">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-950/50 border border-indigo-800/40 text-amber-300 text-xs font-black">
                 <Star className="w-3.5 h-3.5 fill-amber-300" />
                 <span>{score} XP</span>
               </div>
               {streak > 1 && (
-                <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-orange-950/60 border border-orange-700/50 text-orange-300 text-xs font-black animate-bounce">
+                <div className="flex items-center gap-1 px-2 py-1 rounded-xl bg-orange-950/60 border border-orange-700/50 text-orange-300 text-xs font-black animate-bounce">
                   <Flame className="w-3.5 h-3.5 fill-orange-400" />
                   <span>{streak}x</span>
                 </div>
@@ -510,7 +522,7 @@ const SentenceBuilder = () => {
           </div>
 
           {sentencesLoading || progressLoading ? (
-            <div className="py-24 flex flex-col items-center justify-center flex-1">
+            <div className="py-24 flex flex-col items-center justify-center flex-1 bg-[#0b0e1b]">
               <Loading message="Loading sentence builder..." />
             </div>
           ) : isGameOver ? (
@@ -562,14 +574,14 @@ const SentenceBuilder = () => {
               </div>
             </motion.div>
           ) : currentSentence ? (
-            <div className="flex-1 min-h-0 grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-rows-none lg:grid-cols-12 gap-2 lg:gap-6 items-center">
-              <div className="lg:col-span-7 h-[22vh] lg:h-[68vh] max-h-[320px] lg:max-h-none flex items-center justify-center bg-[#121629]/50 rounded-xl lg:rounded-2xl p-1.5 lg:p-2 border border-indigo-900/40 shrink-0">
-                <div className="relative w-full h-full lg:max-h-[62vh] rounded-lg lg:rounded-xl overflow-hidden bg-black flex items-center justify-center shadow-lg">
+            <div className="flex-1 min-h-0 flex flex-col justify-between items-center gap-1.5 lg:max-w-3xl lg:mx-auto bg-[#0b0e1b]">
+              <div className="w-full aspect-video max-h-[38vh] flex items-center justify-center bg-[#121629]/50 rounded-2xl p-1 border border-indigo-900/40 shrink-0 overflow-hidden shadow-lg">
+                <div className="relative w-full h-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
                   {currentSentence.imageUrl ? (
                     <img
                       src={currentSentence.imageUrl}
                       alt="Scene Illustration"
-                      className="w-full h-full object-cover lg:scale-[1.03] rounded-lg lg:rounded-xl"
+                      className="w-full h-full object-cover rounded-xl"
                     />
                   ) : (
                     <div className="flex flex-col items-center justify-center text-slate-500">
@@ -580,23 +592,23 @@ const SentenceBuilder = () => {
 
                   {currentSentence.audioUrl && (
                     <button
-                      onClick={playAudio}
-                      className={`absolute bottom-2 right-2 lg:bottom-2.5 lg:right-2.5 px-3 py-1.5 lg:px-3.5 lg:py-2 rounded-xl backdrop-blur-md border font-bold text-xs flex items-center gap-1.5 lg:gap-2 transition-all cursor-pointer shadow-lg ${
+                      onClick={() => playAudio()}
+                      className={`absolute bottom-2 right-2 px-3 py-1.5 rounded-xl backdrop-blur-md border font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-lg ${
                         isPlayingAudio
                           ? 'bg-teal-500 text-slate-950 border-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.6)]'
                           : 'bg-black/60 text-teal-300 border-teal-500/40 hover:bg-black/80'
                       }`}
                     >
-                      <Volume2 className={`w-3.5 h-3.5 lg:w-4 lg:h-4 ${isPlayingAudio ? 'animate-pulse' : ''}`} />
+                      <Volume2 className={`w-3.5 h-3.5 ${isPlayingAudio ? 'animate-pulse' : ''}`} />
                       <span>{isPlayingAudio ? 'Playing...' : 'Listen Hint'}</span>
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="lg:col-span-5 h-full min-h-0 flex flex-col justify-between gap-2 lg:gap-3">
+              <div className="w-full flex-1 min-h-0 flex flex-col justify-between gap-1.5 sm:gap-2.5 bg-[#0b0e1b]">
                 <div
-                  className={`w-full min-h-[64px] lg:min-h-[100px] p-3 lg:p-4 rounded-xl lg:rounded-2xl border-2 transition-all duration-300 flex flex-wrap items-center justify-center content-center gap-2 relative shadow-inner ${
+                  className={`w-full min-h-[45px] sm:min-h-[70px] p-2 sm:p-3 rounded-xl border-2 transition-all duration-300 flex flex-wrap items-center justify-center content-center gap-1.5 relative shadow-inner ${
                     validationState === 'correct'
                       ? 'bg-emerald-950/30 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
                       : validationState === 'incorrect'
@@ -607,7 +619,7 @@ const SentenceBuilder = () => {
                   }`}
                 >
                   {placedWords.length === 0 ? (
-                    <p className="text-slate-500 text-sm font-semibold text-center select-none">
+                    <p className="text-slate-500 text-xs sm:text-sm font-semibold text-center select-none">
                       Tap the scrambled words below in the correct order
                     </p>
                   ) : (
@@ -619,7 +631,7 @@ const SentenceBuilder = () => {
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.8, opacity: 0 }}
                         onClick={() => handleRemoveWord(wordObj)}
-                        className="px-4 py-2.5 lg:px-3.5 lg:py-2 rounded-xl bg-gradient-to-r from-teal-500/20 to-cyan-500/20 border border-teal-400/60 text-white font-bold text-base sm:text-sm shadow-sm hover:bg-red-950/40 hover:border-red-400 transition-all cursor-pointer"
+                        className="px-2.5 py-1 sm:px-3.5 sm:py-2 rounded-xl bg-gradient-to-r from-teal-500/20 to-cyan-500/20 border border-teal-400/60 text-white font-bold text-xs sm:text-sm shadow-sm hover:bg-red-950/40 hover:border-red-400 transition-all cursor-pointer"
                       >
                         {wordObj.text}
                       </motion.button>
@@ -633,10 +645,10 @@ const SentenceBuilder = () => {
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="p-2.5 lg:p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 text-sm lg:text-xs font-black flex items-center justify-center gap-2 shadow-md"
+                      className="p-1.5 sm:p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5 shadow-md"
                     >
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>🎉 Perfect! Sentence constructed accurately!</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>🎉 Perfect! Playing audio & moving next...</span>
                     </motion.div>
                   )}
                   {validationState === 'incorrect' && (
@@ -644,15 +656,15 @@ const SentenceBuilder = () => {
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="p-2.5 lg:p-3 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-sm lg:text-xs font-bold flex items-center justify-center gap-2 shadow-md"
+                      className="p-1.5 sm:p-2 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md"
                     >
-                      <AlertCircle className="w-4 h-4 text-red-400" />
+                      <AlertCircle className="w-3.5 h-3.5 text-red-400" />
                       <span>Not quite right. Tap words to remove or listen to hint.</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl bg-[#0e1224] border border-indigo-950/80 flex flex-wrap items-center justify-center gap-2.5 lg:gap-2 min-h-[90px] lg:min-h-[110px]">
+                <div className="p-2 sm:p-3 rounded-xl bg-[#0e1224] border border-indigo-950/80 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 min-h-[65px] sm:min-h-[90px]">
                   {wordBank.map((wordObj) => (
                     <motion.button
                       key={wordObj.id}
@@ -660,37 +672,37 @@ const SentenceBuilder = () => {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handlePickWord(wordObj)}
-                      className="px-5 py-3 lg:px-4 lg:py-2.5 rounded-xl bg-[#171d38] hover:bg-[#1f274a] border border-indigo-700/50 hover:border-cyan-400 text-slate-100 font-bold text-base sm:text-sm transition-all shadow-sm cursor-pointer select-none active:scale-95"
+                      className="px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-xl bg-[#171d38] hover:bg-[#1f274a] border border-indigo-700/50 hover:border-cyan-400 text-slate-100 font-bold text-xs sm:text-sm transition-all shadow-sm cursor-pointer select-none active:scale-95"
                     >
                       {wordObj.text}
                     </motion.button>
                   ))}
                 </div>
 
-                <div className="flex items-center gap-2.5 lg:gap-3 pt-0.5">
+                <div className="flex items-center gap-2 pt-0.5">
                   <button
                     onClick={handleResetWords}
-                    disabled={placedWords.length === 0 || validationState === 'correct'}
-                    className="px-4 lg:px-4 py-3.5 lg:py-3 rounded-xl bg-[#121629] border border-indigo-900/60 text-slate-300 hover:text-white hover:bg-[#1a213b] text-sm font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    disabled={placedWords.length === 0 || validationState === 'correct' || isAutoAdvancing}
+                    className="px-3 py-2 sm:py-3 rounded-xl bg-[#121629] border border-indigo-900/60 text-slate-300 hover:text-white hover:bg-[#1a213b] text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    <RotateCcw className="w-5 h-5 lg:w-4 lg:h-4" />
+                    <RotateCcw className="w-4 h-4" />
                     <span>Reset</span>
                   </button>
 
                   {validationState === 'correct' ? (
                     <button
-                      onClick={handleNextSentence}
-                      className="flex-1 py-3.5 lg:py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-base sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 hover:brightness-105"
+                      disabled
+                      className="flex-1 py-2 sm:py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 transition-all opacity-90 cursor-wait"
                     >
-                      <span>{currentSentenceIndex < sentences.length - 1 ? 'Next Sentence ➔' : 'Finish Lesson 🏆'}</span>
+                      <span>Playing Audio... 🎧</span>
                     </button>
                   ) : (
                     <button
                       onClick={handleCheckAnswer}
-                      disabled={placedWords.length === 0}
-                      className="flex-1 py-3.5 lg:py-3 px-4 rounded-xl bg-gradient-to-r from-teal-400 via-cyan-400 to-indigo-400 text-slate-950 font-black text-base sm:text-sm shadow-[0_0_15px_rgba(45,212,191,0.3)] flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+                      disabled={placedWords.length === 0 || isAutoAdvancing}
+                      className="flex-1 py-2 sm:py-3 px-4 rounded-xl bg-gradient-to-r from-teal-400 via-cyan-400 to-indigo-400 text-slate-950 font-black text-xs sm:text-sm shadow-[0_0_15px_rgba(45,212,191,0.3)] flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
                     >
-                      <Check className="w-5 h-5 lg:w-4 lg:h-4 stroke-[3]" />
+                      <Check className="w-4 h-4 stroke-[3]" />
                       <span>Check Answer</span>
                     </button>
                   )}

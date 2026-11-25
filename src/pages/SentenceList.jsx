@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchMyRewards } from '../redux/slices/rewardSlice';
 import { fetchMyStats } from '../redux/slices/userProgressSlice';
 import { useDispatch, useSelector } from 'react-redux';
+import { Shuffle, Play, Pause } from 'lucide-react';
 
 import {
   fetchSceneContents,
@@ -64,15 +65,18 @@ const SentenceList = () => {
     const previousHtmlOverflow = html.style.overflow;
     const previousBodyOverflow = body.style.overflow;
     const previousBodyHeight = body.style.height;
+    const previousBodyBg = body.style.backgroundColor;
 
     html.style.overflow = 'hidden';
     body.style.overflow = 'hidden';
     body.style.height = '100%';
+    body.style.backgroundColor = '#0b0e1b';
 
     return () => {
       html.style.overflow = previousHtmlOverflow;
       body.style.overflow = previousBodyOverflow;
       body.style.height = previousBodyHeight;
+      body.style.backgroundColor = previousBodyBg;
     };
   }, []);
 
@@ -96,7 +100,7 @@ const SentenceList = () => {
   const sceneContentLessonId = useSelector(selectSceneContentLessonMasterId);
   const sceneContentLangId = useSelector(selectSceneContentLanguageId);
   const isAdminBlocked = useSelector(selectSceneContentIsBlocked);
-  const sentences = useSelector((state) => selectSentencesForLesson(state)) || [];
+  const rawSentences = useSelector((state) => selectSentencesForLesson(state)) || [];
   const progressSummary = useSelector(selectLessonProgressSummary);
 
   const currentProgress = useSelector(selectCurrentLessonProgress);
@@ -122,12 +126,39 @@ const SentenceList = () => {
     coinsGranted: false,
   });
   const [playingAudio, setPlayingAudio] = useState(false);
+  const [isAutoplayActive, setIsAutoplayActive] = useState(false);
+  const [isShuffleActive, setIsShuffleActive] = useState(false);
+  const [shuffledIndices, setShuffledIndices] = useState([]);
   const [imageLoaded, setImageLoaded] = useState(false);
   const loadedImageUrlsRef = useRef(new Set());
 
   const submittingRef = useRef(false);
   const progressSyncedRef = useRef(false);
   const audioRef = useRef(null);
+  const autoplayTimerRef = useRef(null);
+
+  // Initialize or update shuffled indices whenever rawSentences change or shuffle toggles
+  useEffect(() => {
+    if (!rawSentences.length) {
+      setShuffledIndices([]);
+      return;
+    }
+    const indices = rawSentences.map((_, i) => i);
+    if (isShuffleActive) {
+      // Fisher-Yates shuffle
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+    }
+    setShuffledIndices(indices);
+  }, [rawSentences, isShuffleActive]);
+
+  // Effective sentences list based on shuffle state
+  const sentences = useMemo(() => {
+    if (!shuffledIndices.length) return rawSentences;
+    return shuffledIndices.map((i) => rawSentences[i]);
+  }, [rawSentences, shuffledIndices]);
 
   const isLessonAlreadyCompleted = useMemo(() => {
     return (
@@ -181,6 +212,11 @@ const SentenceList = () => {
     return () => {
       dispatch(clearCurrentProgress());
       dispatch(clearSceneContents());
+      if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     };
   }, [dispatch]);
 
@@ -205,7 +241,7 @@ const SentenceList = () => {
       const savedReviewIdx = sessionStorage.getItem(storageKey);
       if (savedReviewIdx !== null && !isNaN(savedReviewIdx)) {
         const idx = parseInt(savedReviewIdx, 10);
-        if (idx < sentences.length) {
+        if (idx < rawSentences.length) {
           setCurrentIndex(idx);
           progressSyncedRef.current = true;
           return;
@@ -221,22 +257,24 @@ const SentenceList = () => {
       currentProgress.currentSceneId
     ) {
       const backendSceneId = resolveId(currentProgress.currentSceneId);
-      const idx = sentences.findIndex(
+      const idx = rawSentences.findIndex(
         (s) => resolveId(s.sceneId) === backendSceneId
       );
       if (idx !== -1) {
-        setCurrentIndex(idx);
+        // Find corresponding index in effective sentences
+        const effectiveIdx = shuffledIndices.indexOf(idx);
+        setCurrentIndex(effectiveIdx !== -1 ? effectiveIdx : 0);
       }
     }
     progressSyncedRef.current = true;
-  }, [isContentReady, isProgressReady, sentences, currentProgress, isLessonAlreadyCompleted, lessonMasterId, languageId]);
+  }, [isContentReady, isProgressReady, rawSentences, shuffledIndices, currentProgress, isLessonAlreadyCompleted, lessonMasterId, languageId]);
 
   useEffect(() => {
-    if (isLessonAlreadyCompleted && sentences.length > 0) {
+    if (isLessonAlreadyCompleted && rawSentences.length > 0) {
       const storageKey = `pic2speak_review_index_${lessonMasterId}_${languageId}`;
       sessionStorage.setItem(storageKey, currentIndex.toString());
     }
-  }, [currentIndex, isLessonAlreadyCompleted, lessonMasterId, languageId, sentences.length]);
+  }, [currentIndex, isLessonAlreadyCompleted, lessonMasterId, languageId, rawSentences.length]);
 
   const totalSentences = sentences.length;
   const current = sentences[currentIndex] || null;
@@ -248,89 +286,50 @@ const SentenceList = () => {
   }, [currentProgress]);
 
   const backendCurrentIndex = useMemo(() => {
-    if (!backendCurrentSceneId || !sentences.length) return -1;
-    return sentences.findIndex(
+    if (!backendCurrentSceneId || !rawSentences.length) return -1;
+    const rawIdx = rawSentences.findIndex(
       (s) => resolveId(s.sceneId) === backendCurrentSceneId
     );
-  }, [backendCurrentSceneId, sentences]);
+    if (rawIdx === -1) return -1;
+    return shuffledIndices.indexOf(rawIdx);
+  }, [backendCurrentSceneId, rawSentences, shuffledIndices]);
 
   const isAtBackendCurrent = useMemo(() => {
     if (!backendCurrentSceneId || !current) return false;
     return resolveId(current.sceneId) === backendCurrentSceneId;
   }, [backendCurrentSceneId, current]);
 
-  const playAudio = useCallback((audioUrl) => {
-    if (!audioUrl) return;
+  const playAudio = useCallback((audioUrl, onEndedCallback) => {
+    if (!audioUrl) {
+      if (onEndedCallback) onEndedCallback();
+      return;
+    }
+    
     if (!audioRef.current) {
       audioRef.current = new Audio(audioUrl);
+    } else {
+      audioRef.current.pause();
+      audioRef.current.src = audioUrl;
     }
-    audioRef.current.src = audioUrl;
+
     audioRef.current.currentTime = 0;
+    setPlayingAudio(true);
+
+    audioRef.current.onended = () => {
+      setPlayingAudio(false);
+      if (onEndedCallback) onEndedCallback();
+    };
+
     audioRef.current
       .play()
       .then(() => setPlayingAudio(true))
-      .catch(() => setPlayingAudio(false));
-    audioRef.current.onended = () => setPlayingAudio(false);
+      .catch(() => {
+        setPlayingAudio(false);
+        if (onEndedCallback) onEndedCallback();
+      });
   }, []);
 
-  useEffect(() => {
-    if (!sentences || sentences.length === 0) return;
-    sentences.forEach((s) => {
-      if (s.imageUrl) {
-        const img = new Image();
-        img.src = s.imageUrl;
-        img.onload = () => {
-          loadedImageUrlsRef.current.add(s.imageUrl);
-        };
-      }
-    });
-  }, [sentences]);
-
-  useEffect(() => {
-    if (!current?.imageUrl) {
-      setImageLoaded(true);
-      return;
-    }
-
-    if (loadedImageUrlsRef.current.has(current.imageUrl)) {
-      setImageLoaded(true);
-      return;
-    }
-
-    setImageLoaded(false);
-    const img = new Image();
-    img.src = current.imageUrl;
-    img.onload = () => {
-      loadedImageUrlsRef.current.add(current.imageUrl);
-      setImageLoaded(true);
-    };
-    img.onerror = () => {
-      setImageLoaded(true);
-    };
-  }, [currentIndex, current?.imageUrl]);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setPlayingAudio(false);
-    }
-  }, [currentIndex]);
-
-  useEffect(() => {
-    const isFullyLoaded =
-      sceneContentStatus === 'succeeded' &&
-      isContentReady &&
-      isProgressReady &&
-      progressSyncedRef.current &&
-      imageLoaded;
-
-    if (isFullyLoaded && current?.audioUrl) {
-      playAudio(current.audioUrl);
-    }
-  }, [currentIndex, imageLoaded, current?.audioUrl, playAudio, sceneContentStatus, isContentReady, isProgressReady]);
-
-  const handleCompleteAndAdvance = useCallback(async () => {
+  const handleCompleteAndAdvance = useCallback(async (shouldPlayAudio = false) => {
     if (submittingRef.current) return;
     if (!languageId) return;
 
@@ -338,7 +337,11 @@ const SentenceList = () => {
       if (isLast) {
         setIsModalOpen(true);
       } else {
-        setCurrentIndex((i) => Math.min(i + 1, totalSentences - 1));
+        const nextIdx = Math.min(currentIndex + 1, totalSentences - 1);
+        setCurrentIndex(nextIdx);
+        if (shouldPlayAudio && sentences[nextIdx]?.audioUrl) {
+          playAudio(sentences[nextIdx].audioUrl);
+        }
       }
       return;
     }
@@ -346,6 +349,9 @@ const SentenceList = () => {
     if (!isAtBackendCurrent) {
       if (backendCurrentIndex !== -1) {
         setCurrentIndex(backendCurrentIndex);
+        if (shouldPlayAudio && sentences[backendCurrentIndex]?.audioUrl) {
+          playAudio(sentences[backendCurrentIndex].audioUrl);
+        }
       }
       return;
     }
@@ -401,17 +407,19 @@ const SentenceList = () => {
           setIsModalOpen(true);
         } else {
           const nextSceneId = resolveId(payload?.progress?.currentSceneId);
+          let nextIdx = currentIndex + 1;
           if (nextSceneId) {
-            const nextIdx = sentences.findIndex(
+            const rawFoundIdx = rawSentences.findIndex(
               (s) => resolveId(s.sceneId) === nextSceneId
             );
-            if (nextIdx !== -1) {
-              setCurrentIndex(nextIdx);
-            } else {
-              setCurrentIndex((i) => Math.min(i + 1, totalSentences - 1));
+            if (rawFoundIdx !== -1) {
+              const effIdx = shuffledIndices.indexOf(rawFoundIdx);
+              if (effIdx !== -1) nextIdx = effIdx;
             }
-          } else {
-            setCurrentIndex((i) => Math.min(i + 1, totalSentences - 1));
+          }
+          setCurrentIndex(nextIdx);
+          if (shouldPlayAudio && sentences[nextIdx]?.audioUrl) {
+            playAudio(sentences[nextIdx].audioUrl);
           }
         }
       } else {
@@ -425,11 +433,17 @@ const SentenceList = () => {
               setIsModalOpen(true);
             } else if (freshProgress?.currentSceneId) {
               const freshSceneId = resolveId(freshProgress.currentSceneId);
-              const freshIdx = sentences.findIndex(
+              const rawFreshIdx = rawSentences.findIndex(
                 (s) => resolveId(s.sceneId) === freshSceneId
               );
-              if (freshIdx !== -1) {
-                setCurrentIndex(freshIdx);
+              if (rawFreshIdx !== -1) {
+                const effFreshIdx = shuffledIndices.indexOf(rawFreshIdx);
+                if (effFreshIdx !== -1) {
+                  setCurrentIndex(effFreshIdx);
+                  if (shouldPlayAudio && sentences[effFreshIdx]?.audioUrl) {
+                    playAudio(sentences[effFreshIdx].audioUrl);
+                  }
+                }
               }
             }
           }
@@ -447,23 +461,159 @@ const SentenceList = () => {
     isLast,
     isAtBackendCurrent,
     backendCurrentIndex,
+    rawSentences,
+    shuffledIndices,
     sentences,
     totalSentences,
     isLessonAlreadyCompleted,
+    currentIndex,
+    playAudio,
   ]);
 
-  const handleNext = handleCompleteAndAdvance;
+  // Autoplay Effect
+  useEffect(() => {
+    if (!isAutoplayActive || !sentences.length) return;
+    const currentItem = sentences[currentIndex];
+    if (!currentItem || !currentItem.audioUrl) return;
+
+    if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
+
+    const isFullyLoaded =
+      sceneContentStatus === 'succeeded' &&
+      isContentReady &&
+      isProgressReady &&
+      progressSyncedRef.current &&
+      imageLoaded;
+
+    if (isFullyLoaded) {
+      playAudio(currentItem.audioUrl, () => {
+        if (!isAutoplayActive) return;
+        autoplayTimerRef.current = setTimeout(() => {
+          if (!isAutoplayActive) return;
+          if (!isLast) {
+            handleCompleteAndAdvance(false);
+          } else {
+            setIsAutoplayActive(false);
+            handleCompleteAndAdvance(false);
+          }
+        }, 1600); // 1.6s delay after full audio finishes
+      });
+    }
+
+    return () => {
+      if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
+    };
+  }, [currentIndex, isAutoplayActive, sentences, imageLoaded, sceneContentStatus, isContentReady, isProgressReady, isLast, playAudio, handleCompleteAndAdvance]);
+
+  useEffect(() => {
+    if (isAutoplayActive) return;
+    if (audioRef.current && !playingAudio) {
+      audioRef.current.pause();
+    }
+  }, [isAutoplayActive, playingAudio]);
+
+  useEffect(() => {
+    if (!rawSentences || rawSentences.length === 0) return;
+    rawSentences.forEach((s) => {
+      if (s.imageUrl) {
+        const img = new Image();
+        img.src = s.imageUrl;
+        img.onload = () => {
+          loadedImageUrlsRef.current.add(s.imageUrl);
+        };
+      }
+    });
+  }, [rawSentences]);
+
+  useEffect(() => {
+    if (!current?.imageUrl) {
+      setImageLoaded(true);
+      return;
+    }
+
+    if (loadedImageUrlsRef.current.has(current.imageUrl)) {
+      setImageLoaded(true);
+      return;
+    }
+
+    setImageLoaded(false);
+    const img = new Image();
+    img.src = current.imageUrl;
+    img.onload = () => {
+      loadedImageUrlsRef.current.add(current.imageUrl);
+      setImageLoaded(true);
+    };
+    img.onerror = () => {
+      setImageLoaded(true);
+    };
+  }, [currentIndex, current?.imageUrl]);
+
+  const handleShuffleToggle = () => {
+    const nextShuffleState = !isShuffleActive;
+    setIsShuffleActive(nextShuffleState);
+    setCurrentIndex(0); // Reset to beginning of shuffled/normal order
+    if (isAutoplayActive) {
+      setIsAutoplayActive(false);
+      if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
+      if (audioRef.current) audioRef.current.pause();
+    }
+  };
+
+  const handleToggleAutoplay = () => {
+    const nextState = !isAutoplayActive;
+    setIsAutoplayActive(nextState);
+    if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
+
+    if (nextState) {
+      if (current?.audioUrl) {
+        playAudio(current.audioUrl, () => {
+          if (!isAutoplayActive) return;
+          autoplayTimerRef.current = setTimeout(() => {
+            if (!isLast) handleCompleteAndAdvance(false);
+            else {
+              setIsAutoplayActive(false);
+              handleCompleteAndAdvance(false);
+            }
+          }, 1600);
+        });
+      }
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setPlayingAudio(false);
+    }
+  };
+
+  const handleNext = useCallback(() => {
+    setIsAutoplayActive(false);
+    if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
+    if (audioRef.current) audioRef.current.pause();
+    handleCompleteAndAdvance(true);
+  }, [handleCompleteAndAdvance]);
 
   const handlePrev = useCallback(() => {
-    if (!isFirst) setCurrentIndex((i) => i - 1);
-  }, [isFirst]);
+    setIsAutoplayActive(false);
+    if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current);
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    if (!isFirst) {
+      const prevIdx = currentIndex - 1;
+      setCurrentIndex(prevIdx);
+      if (sentences[prevIdx]?.audioUrl) {
+        playAudio(sentences[prevIdx].audioUrl);
+      }
+    }
+  }, [isFirst, currentIndex, sentences, playAudio]);
 
   const displayTitle = lessonTitle || lessonSummary?.title || 'Lesson 1';
 
   if (isAdminBlocked) {
     return (
       <div
-        className="flex items-center justify-center bg-[#0d0f1a] p-4 overflow-hidden text-white"
+        className="flex items-center justify-center bg-[#0b0e1b] p-4 overflow-hidden text-white"
         style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
       >
         <div className="max-w-md text-center bg-slate-900/90 rounded-2xl shadow-xl p-5 border border-amber-500/30">
@@ -486,7 +636,7 @@ const SentenceList = () => {
   if (sceneContentStatus === 'succeeded' && totalSentences === 0) {
     return (
       <div
-        className="flex items-center justify-center bg-[#0d0f1a] p-4 overflow-hidden text-white"
+        className="flex items-center justify-center bg-[#0b0e1b] p-4 overflow-hidden text-white"
         style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
       >
         <div className="max-w-sm text-center bg-slate-900/90 rounded-2xl shadow-xl p-5 border border-slate-800">
@@ -514,7 +664,7 @@ const SentenceList = () => {
   ) {
     return (
       <div
-        className="flex items-center justify-center bg-[#0d0f1a] overflow-hidden"
+        className="flex items-center justify-center bg-[#0b0e1b] overflow-hidden"
         style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
       >
         <div className="text-center">
@@ -530,7 +680,7 @@ const SentenceList = () => {
       className="flex flex-col w-full bg-[#0b0e1b] text-white overflow-hidden min-h-0 select-none"
       style={{ height: VIEWPORT_HEIGHT, maxHeight: VIEWPORT_HEIGHT }}
     >
-      <header className="bg-[#121629]/90 backdrop-blur-md border-b border-indigo-950/50 px-2 py-1 flex items-center gap-1.5 shrink-0">
+      <header className="bg-[#121629]/90 backdrop-blur-md border-b border-indigo-950/50 px-2.5 py-1.5 flex items-center gap-1.5 shrink-0">
         <button
           onClick={() => navigate('/adventure-map')}
           className="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 transition-colors shrink-0 text-[11px] font-bold text-slate-200 border border-slate-700/50"
@@ -554,43 +704,42 @@ const SentenceList = () => {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col lg:flex-row items-center justify-center p-2 lg:p-6 min-h-0 overflow-y-auto lg:overflow-hidden w-full max-w-7xl mx-auto gap-2 lg:gap-8">
+      <main className="flex-1 flex flex-col items-center justify-between p-2 sm:p-3 overflow-hidden w-full max-w-3xl mx-auto gap-1 bg-[#0b0e1b]">
         {current ? (
           <>
-            <div className="relative w-full lg:w-1/2 aspect-video max-h-[24vh] sm:max-h-[30vh] lg:max-h-[72vh] rounded-xl shadow-lg border border-indigo-500/25 overflow-hidden bg-slate-950 shrink-0 flex items-center justify-center">
-              {current.imageUrl ? (
-                <img
-                  src={current.imageUrl}
-                  alt="Scene"
-                  className="w-full h-full object-cover object-center"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full gap-1 p-2 text-slate-500">
-                  <span className="text-2xl">🖼️</span>
-                  <p className="text-[10px] font-medium">No image available</p>
-                </div>
-              )}
-              <button className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/80 hover:text-red-400 hover:bg-black/60 transition-all text-xs">
-                ♡
-              </button>
+            <div className="w-full aspect-video max-h-[32vh] flex items-center justify-center bg-[#121629]/50 rounded-xl p-1 border border-indigo-900/40 shrink-0 overflow-hidden shadow-lg">
+              <div className="relative w-full h-full rounded-lg overflow-hidden bg-black flex items-center justify-center">
+                {current.imageUrl ? (
+                  <img
+                    src={current.imageUrl}
+                    alt="Scene"
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full gap-1 p-2 text-slate-500">
+                    <span className="text-2xl">🖼️</span>
+                    <p className="text-[10px] font-medium">No image available</p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="w-full lg:w-1/2 flex flex-col justify-between h-full max-w-xl mx-auto gap-1.5 py-1">
-              <div className="hidden sm:flex justify-center lg:justify-start shrink-0">
-                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-950/80 via-purple-950/80 to-indigo-950/80 border border-indigo-500/40">
+            <div className="w-full flex-1 min-h-0 flex flex-col justify-between gap-1">
+              <div className="hidden sm:flex justify-center shrink-0">
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-950/80 via-purple-950/80 to-indigo-950/80 border border-indigo-500/40">
                   <span className="text-indigo-400 text-[10px]">✨</span>
                   <span className="text-[10px] font-bold tracking-wider text-indigo-200 uppercase">Speak & Learn</span>
                 </div>
               </div>
 
-              <div className="w-full bg-gradient-to-b from-[#151932]/90 to-[#101324]/90 rounded-xl border border-indigo-500/30 px-3 py-2 text-center shadow-lg relative overflow-y-auto max-h-[140px] shrink-0 flex items-center justify-center">
-                <p className="text-xs sm:text-base lg:text-xl font-bold text-white tracking-wide leading-relaxed">
+              <div className="w-full bg-gradient-to-b from-[#151932]/90 to-[#101324]/90 rounded-xl border border-indigo-500/30 px-3 py-2 text-center shadow-lg relative overflow-y-auto max-h-[110px] shrink-0 flex items-center justify-center">
+                <p className="text-xs sm:text-sm lg:text-lg font-bold text-white tracking-wide leading-relaxed">
                   {current.sentence}
                 </p>
               </div>
 
-              <div className="flex items-center justify-center gap-2 shrink-0 my-0.5">
-                <div className="flex items-center gap-0.5 opacity-60 scale-90">
+              <div className="flex items-center justify-center gap-2 shrink-0">
+                <div className="flex items-center gap-0.5 opacity-60 scale-75">
                   {[3, 6, 10, 6, 12, 16, 9, 4, 13, 7, 3].map((h, i) => (
                     <div
                       key={`w1-${i}`}
@@ -603,14 +752,14 @@ const SentenceList = () => {
                 <button
                   onClick={() => playAudio(current.audioUrl)}
                   disabled={!current.audioUrl}
-                  className="relative group w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-teal-500 via-emerald-400 to-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="relative group w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-teal-500 via-emerald-400 to-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   title="Listen / Play Audio"
                 >
                   <div className="absolute inset-0 rounded-full border border-white/40 animate-pulse pointer-events-none" />
-                  <span className="text-lg sm:text-xl text-slate-950 font-black ml-0.5">▶</span>
+                  <span className="text-base sm:text-lg text-slate-950 font-black ml-0.5">▶</span>
                 </button>
 
-                <div className="flex items-center gap-0.5 opacity-60 scale-90">
+                <div className="flex items-center gap-0.5 opacity-60 scale-75">
                   {[7, 13, 4, 9, 16, 12, 6, 10, 6, 3, 9].map((h, i) => (
                     <div
                       key={`w2-${i}`}
@@ -623,33 +772,49 @@ const SentenceList = () => {
 
               <div className="grid grid-cols-2 gap-2 shrink-0">
                 <button
-                  onClick={() => playAudio(current.audioUrl)}
-                  disabled={!current.audioUrl}
-                  className="flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-slate-900/90 to-indigo-950/80 border border-indigo-500/30 rounded-xl hover:border-indigo-400/60 transition-all shadow-sm disabled:opacity-40 group"
+                  onClick={handleShuffleToggle}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-3 border rounded-xl transition-all shadow-sm group cursor-pointer ${
+                    isShuffleActive
+                      ? 'bg-purple-500/20 border-purple-400 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.4)]'
+                      : 'bg-gradient-to-r from-slate-900/90 to-indigo-950/80 border-indigo-500/30 text-slate-100 hover:border-indigo-400/60'
+                  }`}
+                  title={isShuffleActive ? 'Shuffle Active' : 'Shuffle Sentences'}
                 >
-                  <span className="text-sm">🎙️</span>
+                  <Shuffle className={`w-3.5 h-3.5 ${isShuffleActive ? 'text-purple-400 animate-spin' : 'text-indigo-300 group-hover:text-indigo-200'}`} />
                   <div className="text-left leading-tight">
-                    <p className="font-bold text-slate-100 text-xs group-hover:text-indigo-300 transition-colors">Repeat</p>
+                    <p className={`font-bold text-[11px] transition-colors ${isShuffleActive ? 'text-purple-300' : 'text-slate-100 group-hover:text-indigo-300'}`}>
+                      {isShuffleActive ? 'Shuffle On' : 'Shuffle'}
+                    </p>
                   </div>
                 </button>
 
                 <button
-                  onClick={() => playAudio(current.audioUrl)}
-                  disabled={!current.audioUrl}
-                  className="flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-slate-900/90 to-indigo-950/80 border border-indigo-500/30 rounded-xl hover:border-indigo-400/60 transition-all shadow-sm disabled:opacity-40 group"
+                  onClick={handleToggleAutoplay}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-3 border rounded-xl transition-all shadow-sm group cursor-pointer ${
+                    isAutoplayActive
+                      ? 'bg-teal-500/20 border-teal-400 text-teal-300 shadow-[0_0_12px_rgba(20,184,166,0.4)]'
+                      : 'bg-gradient-to-r from-slate-900/90 to-indigo-950/80 border-indigo-500/30 text-slate-100 hover:border-indigo-400/60'
+                  }`}
+                  title={isAutoplayActive ? 'Pause Autoplay' : 'Start Autoplay'}
                 >
-                  <span className="text-sm">🎧</span>
+                  {isAutoplayActive ? (
+                    <Pause className="w-3.5 h-3.5 text-teal-400 fill-teal-400 animate-pulse" />
+                  ) : (
+                    <Play className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                  )}
                   <div className="text-left leading-tight">
-                    <p className="font-bold text-slate-100 text-xs group-hover:text-indigo-300 transition-colors">Listen</p>
+                    <p className={`font-bold text-[11px] transition-colors ${isAutoplayActive ? 'text-teal-300' : 'text-slate-100 group-hover:text-teal-300'}`}>
+                      {isAutoplayActive ? 'Autoplay On' : 'Autoplay'}
+                    </p>
                   </div>
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0 w-full pt-0.5">
+              <div className="flex items-center gap-2 shrink-0 w-full pt-0.5 pb-0.5">
                 <button
                   onClick={handlePrev}
                   disabled={isFirst}
-                  className="flex items-center justify-center px-3 py-2 bg-slate-900/80 border border-slate-700/60 rounded-xl font-bold text-xs text-slate-300 hover:bg-slate-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  className="flex items-center justify-center px-3.5 py-2 bg-slate-900/80 border border-slate-700/60 rounded-xl font-bold text-xs text-slate-300 hover:bg-slate-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 cursor-pointer"
                 >
                   ← Prev
                 </button>
@@ -657,7 +822,7 @@ const SentenceList = () => {
                 <button
                   onClick={handleNext}
                   disabled={actionStatus === 'loading' || submittingRef.current}
-                  className="flex-1 flex items-center justify-center py-2 bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-[0_0_15px_rgba(20,184,166,0.3)] disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center py-2 bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-[0_0_15px_rgba(20,184,166,0.3)] disabled:opacity-50 cursor-pointer"
                 >
                   <span>
                     {!isAtBackendCurrent && backendCurrentSceneId
