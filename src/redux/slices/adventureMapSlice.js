@@ -1,32 +1,64 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import API from '../../api/api';
-import { saveMapSnapshot } from '../../utils/mapCache';
+import {
+  loadMapSnapshot,
+  loadMapVersion,
+  saveMapSnapshot,
+} from '../../utils/mapCache';
 
 export const fetchPublishedMap = createAsyncThunk(
   'adventureMap/fetchPublishedMap',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { dispatch, getState, rejectWithValue }) => {
     try {
-      const state = getState().adventureMap;
-      const currentMap = state.publishedMap;
-      const headers = {};
+      // Step 1: Hydrate from IndexedDB immediately if Redux doesn't have the map yet,
+      // and read only the lightweight cached version string.
+      let currentMap = getState().adventureMap.publishedMap;
+      let localVersion = await loadMapVersion();
 
-      if (currentMap?.publishedAt) {
-        const ver = new Date(currentMap.publishedAt).getTime().toString();
-        headers['If-None-Match'] = `W/"map-${ver}"`;
+      if (!currentMap) {
+        const snapshot = await loadMapSnapshot();
+        if (snapshot?.data) {
+          currentMap = snapshot.data;
+          dispatch(hydrateMapFromCache(snapshot.data));
+          if (!localVersion && snapshot.version != null) {
+            localVersion = String(snapshot.version);
+          }
+        }
       }
 
-      const res = await API.get('/adventure-map/published', {
-        headers,
-        validateStatus: (status) => status === 200 || status === 304
+      if (!localVersion && currentMap?.publishedAt) {
+        localVersion = new Date(currentMap.publishedAt).getTime().toString();
+      }
+
+      // Step 2: Poll lightweight /adventure-map/version with cache-busting headers
+      const versionRes = await API.get('/adventure-map/version', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
       });
 
-      if (res.status === 304) {
+      const serverVersion =
+        versionRes.data?.version != null ? String(versionRes.data.version) : null;
+
+      // Step 3: Skip heavy /published fetch when cached version matches server version
+      if (currentMap && localVersion && serverVersion && localVersion === serverVersion) {
         return { data: currentMap, notModified: true };
       }
 
-      const freshMap = res.data.data;
+      // Version differs or no local cache exists: fetch full published map
+      const res = await API.get('/adventure-map/published', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      });
+
+      const freshMap = res.data?.data;
       if (freshMap) {
-        saveMapSnapshot(freshMap).catch(() => {});
+        await saveMapSnapshot(freshMap).catch(() => {});
       }
       return { data: freshMap, notModified: false };
     } catch (err) {
@@ -34,6 +66,8 @@ export const fetchPublishedMap = createAsyncThunk(
     }
   }
 );
+
+export const syncAdventureMap = fetchPublishedMap;
 
 export const fetchUnlockedLessonAsset = createAsyncThunk(
   'adventureMap/fetchUnlockedLessonAsset',
@@ -156,7 +190,9 @@ const adventureMapSlice = createSlice({
       })
       .addCase(fetchPublishedMap.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        if (!state.publishedMap) {
+          state.error = action.payload;
+        }
       })
 
       .addCase(fetchDraftMap.pending, (state) => {

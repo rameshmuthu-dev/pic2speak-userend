@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Stage, Layer, Image as KonvaImage, Rect, Text as KonvaText, Group, Line, Arc, Circle, Ellipse } from 'react-konva';
 import useImage from 'use-image';
 
@@ -38,7 +38,7 @@ import { useProgressCamera } from '../hooks/useProgressCamera';
 import { UserWalkingCharacter } from '../components/UserWalkingCharacter';
 import { UserLockedLocation } from '../components/UserLockedLocation';
 import { getOptimizedImageUrl } from '../utils/imageOptimization';
-import { fetchPublishedMap, fetchUnlockedLessonAsset } from '../redux/slices/adventureMapSlice';
+import { syncAdventureMap, fetchUnlockedLessonAsset } from '../redux/slices/adventureMapSlice';
 import { findNearestPointOnPolyline } from '../utils/roadCurveUtils';
 import Loading from '../ui/Loading';
 import {
@@ -1272,6 +1272,7 @@ const _lastProgressFetchMap = new Map();
 const AdventureMap = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     publishedMap: mapData,
     loading: mapLoadingRequest,
@@ -1396,10 +1397,36 @@ const AdventureMap = () => {
   }, [initializationRetryKey]);
 
   useEffect(() => {
-    if (!mapData) {
-      dispatch(fetchPublishedMap());
-    }
-  }, [mapData, dispatch]);
+    let lastSyncAt = 0;
+    const triggerSync = () => {
+      const now = Date.now();
+      if (now - lastSyncAt < 1000) return;
+      lastSyncAt = now;
+      dispatch(syncAdventureMap());
+    };
+
+    // Sync on mount and when navigating back to the map screen from a lesson
+    triggerSync();
+
+    // Sync when a mobile user switches back to the PWA/browser tab or regains window focus
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        triggerSync();
+      }
+    };
+
+    const handleFocus = () => {
+      triggerSync();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [dispatch, location.key]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -2092,7 +2119,7 @@ const AdventureMap = () => {
     setLanguageStatus('loading');
     setLanguageError(null);
     setInitializationRetryKey((value) => value + 1);
-    dispatch(fetchPublishedMap());
+    dispatch(syncAdventureMap());
   }, [dispatch]);
 
   const checkCardVisibility = useCallback(() => {

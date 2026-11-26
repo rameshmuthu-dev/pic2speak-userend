@@ -12,8 +12,10 @@
  */
 
 const DB_NAME = 'pic2speak_map_cache_v1';
+const DB_VERSION = 2;
 const STORE_NAME = 'published_map_store';
 const RECORD_KEY = 'current_published_map';
+const VERSION_INDEX = 'version_idx';
 
 const openDB = () => {
   return new Promise((resolve, reject) => {
@@ -22,12 +24,19 @@ const openDB = () => {
     }
 
     try {
-      const request = window.indexedDB.open(DB_NAME, 1);
+      const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
+        const tx = event.target.transaction;
+        let store;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+          store = db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+        } else {
+          store = tx.objectStore(STORE_NAME);
+        }
+        if (!store.indexNames.contains(VERSION_INDEX)) {
+          store.createIndex(VERSION_INDEX, 'version', { unique: false });
         }
       };
 
@@ -114,6 +123,64 @@ export const loadMapSnapshot = async () => {
         tx.oncomplete = () => db.close();
       } catch (err) {
         console.warn('⚠️ Failed to load map snapshot from IndexedDB:', err);
+        resolve(null);
+      }
+    });
+  } catch (err) {
+    return null;
+  }
+};
+
+/**
+ * Load only the cached map version string from IndexedDB without
+ * deserializing the heavy map payload into memory.
+ */
+export const loadMapVersion = async () => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const db = await openDB();
+    if (!db) return null;
+
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+
+        if (store.indexNames.contains(VERSION_INDEX)) {
+          const index = store.index(VERSION_INDEX);
+          const keyCursorReq = index.openKeyCursor();
+
+          keyCursorReq.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (!cursor) {
+              resolve(null);
+              return;
+            }
+            if (cursor.primaryKey === RECORD_KEY) {
+              resolve(cursor.key != null ? String(cursor.key) : null);
+            } else {
+              cursor.continue();
+            }
+          };
+
+          keyCursorReq.onerror = () => resolve(null);
+        } else {
+          const getReq = store.get(RECORD_KEY);
+          getReq.onsuccess = (event) => {
+            const result = event.target.result;
+            resolve(result?.version != null ? String(result.version) : null);
+          };
+          getReq.onerror = () => resolve(null);
+        }
+
+        tx.oncomplete = () => db.close();
+        tx.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+      } catch (err) {
+        console.warn('⚠️ Failed to load map version from IndexedDB:', err);
         resolve(null);
       }
     });
