@@ -30,8 +30,9 @@ export const fetchPublishedMap = createAsyncThunk(
         localVersion = new Date(currentMap.publishedAt).getTime().toString();
       }
 
-      // Step 2: Poll lightweight /adventure-map/version with cache-busting headers
+      // Step 2: Poll lightweight /adventure-map/version with cache-busting timestamp param & headers
       const versionRes = await API.get('/adventure-map/version', {
+        params: { t: Date.now() },
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           Pragma: 'no-cache',
@@ -47,8 +48,9 @@ export const fetchPublishedMap = createAsyncThunk(
         return { data: currentMap, notModified: true };
       }
 
-      // Version differs or no local cache exists: fetch full published map
+      // Version differs or no local cache exists: fetch full published map with cache-busting param
       const res = await API.get('/adventure-map/published', {
+        params: { t: Date.now() },
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           Pragma: 'no-cache',
