@@ -289,7 +289,6 @@ const SentenceList = () => {
   }, [backendCurrentSceneId, current]);
 
   const playAudio = useCallback((audioUrl, onEndedCallback) => {
-    // LOADING LA IRUKKUM POTHU AUDIO PLAY AAGAVE KODAATHU GUARD
     if (sceneContentStatus !== 'succeeded' || !isContentReady) {
       if (onEndedCallback) onEndedCallback();
       return;
@@ -324,7 +323,6 @@ const SentenceList = () => {
       });
   }, [sceneContentStatus, isContentReady]);
 
-  // STRICT ENTRY AUDIO TRIGGER: Fires ONLY when content status is strictly 'succeeded' and ready
   useEffect(() => {
     if (sceneContentStatus !== 'succeeded' || !isContentReady || !current?.audioUrl || initialAudioPlayedRef.current) return;
 
@@ -652,16 +650,18 @@ const SentenceList = () => {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-between p-2 sm:p-3 overflow-hidden w-full max-w-3xl mx-auto gap-1 bg-[#0b0e1b]">
+      {/* Responsive Container: Mobile (Vertical Stack), Laptop/Desktop lg+ (Left Image, Right Content Side-by-Side) */}
+      <main className="flex-1 flex flex-col lg:flex-row items-center justify-center p-2 sm:p-4 overflow-hidden w-full max-w-6xl mx-auto gap-3 lg:gap-6 bg-[#0b0e1b]">
         {current ? (
           <>
-            <div className="w-full aspect-video flex items-center justify-center bg-[#121629]/50 rounded-xl p-1 border border-indigo-900/40 shrink-0 overflow-hidden shadow-lg">
-              <div className="relative w-full h-full rounded-lg overflow-hidden bg-black flex items-center justify-center">
+            {/* Left Column: Image Container (Full width on mobile/tablet, flex-1 on laptop) */}
+            <div className="w-full lg:w-3/5 h-auto lg:h-full max-h-[50vh] lg:max-h-[75vh] flex items-center justify-center bg-[#121629]/50 rounded-2xl p-2 border border-indigo-900/40 shrink-0 overflow-hidden shadow-xl">
+              <div className="relative w-full h-full aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center">
                 {current.imageUrl ? (
                   <img
                     src={current.imageUrl}
                     alt="Scene"
-                    className="w-full h-full object-cover rounded-lg"
+                    className="w-full h-full object-cover rounded-xl"
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full gap-1 p-2 text-slate-500">
@@ -672,21 +672,22 @@ const SentenceList = () => {
               </div>
             </div>
 
-            <div className="w-full flex-1 min-h-0 flex flex-col justify-between gap-1">
-              <div className="hidden sm:flex justify-center shrink-0">
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-950/80 via-purple-950/80 to-indigo-950/80 border border-indigo-500/40">
-                  <span className="text-indigo-400 text-[10px]">✨</span>
-                  <span className="text-[10px] font-bold tracking-wider text-indigo-200 uppercase">Speak & Learn</span>
+            {/* Right Column: Sentence, Audio & Controls */}
+            <div className="w-full lg:w-2/5 flex flex-col justify-center gap-2 lg:gap-3 min-h-0">
+              <div className="hidden lg:flex justify-start shrink-0">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-indigo-950/80 via-purple-950/80 to-indigo-950/80 border border-indigo-500/40">
+                  <span className="text-indigo-400 text-xs">✨</span>
+                  <span className="text-[11px] font-bold tracking-wider text-indigo-200 uppercase">Speak & Learn</span>
                 </div>
               </div>
 
-              <div className="w-full bg-gradient-to-b from-[#151932]/90 to-[#101324]/90 rounded-xl border border-indigo-500/30 px-3 py-2 text-center shadow-lg relative overflow-y-auto max-h-[110px] shrink-0 flex items-center justify-center">
-                <p className="text-xs sm:text-sm lg:text-lg font-bold text-white tracking-wide leading-relaxed">
+              <div className="w-full bg-gradient-to-b from-[#151932]/90 to-[#101324]/90 rounded-xl border border-indigo-500/30 px-4 py-3 text-center shadow-lg relative overflow-y-auto max-h-[120px] shrink-0 flex items-center justify-center">
+                <p className="text-sm sm:text-base lg:text-xl font-bold text-white tracking-wide leading-relaxed">
                   {current.sentence}
                 </p>
               </div>
 
-              <div className="flex items-center justify-center gap-2 shrink-0">
+              <div className="flex items-center justify-center gap-2 shrink-0 my-1">
                 <div className="flex items-center gap-0.5 opacity-60 scale-75">
                   {[3, 6, 10, 6, 12, 16, 9, 4, 13, 7, 3].map((h, i) => (
                     <div
@@ -700,11 +701,11 @@ const SentenceList = () => {
                 <button
                   onClick={() => playAudio(current.audioUrl)}
                   disabled={!current.audioUrl}
-                  className="relative group w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-teal-500 via-emerald-400 to-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="relative group w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-teal-500 via-emerald-400 to-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   title="Listen / Play Audio"
                 >
                   <div className="absolute inset-0 rounded-full border border-white/40 animate-pulse pointer-events-none" />
-                  <span className="text-base sm:text-lg text-slate-950 font-black ml-0.5">▶</span>
+                  <span className="text-lg sm:text-xl text-slate-950 font-black ml-0.5">▶</span>
                 </button>
 
                 <div className="flex items-center gap-0.5 opacity-60 scale-75">
@@ -721,16 +722,16 @@ const SentenceList = () => {
               <div className="grid grid-cols-2 gap-2 shrink-0">
                 <button
                   onClick={handleShuffleToggle}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 px-3 border rounded-xl transition-all shadow-sm group cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 py-2 px-3 border rounded-xl transition-all shadow-sm group cursor-pointer ${
                     isShuffleActive
                       ? 'bg-purple-500/20 border-purple-400 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.4)]'
                       : 'bg-gradient-to-r from-slate-900/90 to-indigo-950/80 border-indigo-500/30 text-slate-100 hover:border-indigo-400/60'
                   }`}
                   title={isShuffleActive ? 'Shuffle Active' : 'Shuffle Sentences'}
                 >
-                  <Shuffle className={`w-3.5 h-3.5 ${isShuffleActive ? 'text-purple-400 animate-spin' : 'text-indigo-300 group-hover:text-indigo-200'}`} />
+                  <Shuffle className={`w-4 h-4 ${isShuffleActive ? 'text-purple-400 animate-spin' : 'text-indigo-300 group-hover:text-indigo-200'}`} />
                   <div className="text-left leading-tight">
-                    <p className={`font-bold text-[11px] transition-colors ${isShuffleActive ? 'text-purple-300' : 'text-slate-100 group-hover:text-indigo-300'}`}>
+                    <p className={`font-bold text-xs transition-colors ${isShuffleActive ? 'text-purple-300' : 'text-slate-100 group-hover:text-indigo-300'}`}>
                       {isShuffleActive ? 'Shuffle On' : 'Shuffle'}
                     </p>
                   </div>
@@ -738,7 +739,7 @@ const SentenceList = () => {
 
                 <button
                   onClick={handleToggleAutoplay}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 px-3 border rounded-xl transition-all shadow-sm group cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 py-2 px-3 border rounded-xl transition-all shadow-sm group cursor-pointer ${
                     isAutoplayActive
                       ? 'bg-teal-500/20 border-teal-400 text-teal-300 shadow-[0_0_12px_rgba(20,184,166,0.4)]'
                       : 'bg-gradient-to-r from-slate-900/90 to-indigo-950/80 border-indigo-500/30 text-slate-100 hover:border-indigo-400/60'
@@ -746,23 +747,23 @@ const SentenceList = () => {
                   title={isAutoplayActive ? 'Pause Autoplay' : 'Start Autoplay'}
                 >
                   {isAutoplayActive ? (
-                    <Pause className="w-3.5 h-3.5 text-teal-400 fill-teal-400 animate-pulse" />
+                    <Pause className="w-4 h-4 text-teal-400 fill-teal-400 animate-pulse" />
                   ) : (
-                    <Play className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                    <Play className="w-4 h-4 text-amber-300 fill-amber-300" />
                   )}
                   <div className="text-left leading-tight">
-                    <p className={`font-bold text-[11px] transition-colors ${isAutoplayActive ? 'text-teal-300' : 'text-slate-100 group-hover:text-teal-300'}`}>
+                    <p className={`font-bold text-xs transition-colors ${isAutoplayActive ? 'text-teal-300' : 'text-slate-100 group-hover:text-teal-300'}`}>
                       {isAutoplayActive ? 'Autoplay On' : 'Autoplay'}
                     </p>
                   </div>
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0 w-full pt-0.5 pb-0.5">
+              <div className="flex items-center gap-2 shrink-0 w-full pt-1">
                 <button
                   onClick={handlePrev}
                   disabled={isFirst}
-                  className="flex items-center justify-center px-3.5 py-2 bg-slate-900/80 border border-slate-700/60 rounded-xl font-bold text-xs text-slate-300 hover:bg-slate-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 cursor-pointer"
+                  className="flex items-center justify-center px-4 py-2.5 bg-slate-900/80 border border-slate-700/60 rounded-xl font-bold text-xs text-slate-300 hover:bg-slate-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 cursor-pointer"
                 >
                   ← Prev
                 </button>
@@ -770,7 +771,7 @@ const SentenceList = () => {
                 <button
                   onClick={handleNext}
                   disabled={actionStatus === 'loading' || submittingRef.current}
-                  className="flex-1 flex items-center justify-center py-2 bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-[0_0_15px_rgba(20,184,166,0.3)] disabled:opacity-50 cursor-pointer"
+                  className="flex-1 flex items-center justify-center py-2.5 bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-[0_0_15px_rgba(20,184,166,0.3)] disabled:opacity-50 cursor-pointer"
                 >
                   <span>
                     {!isAtBackendCurrent && backendCurrentSceneId
