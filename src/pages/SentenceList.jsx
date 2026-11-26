@@ -220,6 +220,7 @@ const SentenceList = () => {
     dispatch(startLesson({ lessonMasterId, languageId }));
   }, [lessonMasterId, languageId, dispatch]);
 
+  // Sync progress ONLY ONCE when data first loads to prevent resetting index on subsequent actions
   useEffect(() => {
     if (progressSyncedRef.current) return;
     if (!isContentReady || rawSentences.length === 0) return;
@@ -354,15 +355,6 @@ const SentenceList = () => {
       return;
     }
 
-    if (!isAtBackendCurrent && backendCurrentIndex !== -1) {
-      initialAudioPlayedRef.current = false;
-      setCurrentIndex(backendCurrentIndex);
-      if (shouldPlayAudio && sentences[backendCurrentIndex]?.audioUrl) {
-        playAudio(sentences[backendCurrentIndex].audioUrl);
-      }
-      return;
-    }
-
     if (!current) return;
 
     submittingRef.current = true;
@@ -413,17 +405,7 @@ const SentenceList = () => {
 
           setIsModalOpen(true);
         } else {
-          const nextSceneId = resolveId(payload?.progress?.currentSceneId);
           let nextIdx = currentIndex + 1;
-          if (nextSceneId) {
-            const rawFoundIdx = rawSentences.findIndex(
-              (s) => resolveId(s.sceneId) === nextSceneId
-            );
-            if (rawFoundIdx !== -1) {
-              const effIdx = shuffledIndices.indexOf(rawFoundIdx);
-              if (effIdx !== -1) nextIdx = effIdx;
-            }
-          }
           initialAudioPlayedRef.current = false;
           setCurrentIndex(nextIdx);
           if (shouldPlayAudio && sentences[nextIdx]?.audioUrl) {
@@ -431,7 +413,7 @@ const SentenceList = () => {
           }
         }
       } else {
-        const nextIdx = Math.min(currentIndex + 1, totalSentences - 1);
+        let nextIdx = Math.min(currentIndex + 1, totalSentences - 1);
         initialAudioPlayedRef.current = false;
         setCurrentIndex(nextIdx);
         if (shouldPlayAudio && sentences[nextIdx]?.audioUrl) {
@@ -448,10 +430,6 @@ const SentenceList = () => {
     lessonMasterId,
     dispatch,
     isLast,
-    isAtBackendCurrent,
-    backendCurrentIndex,
-    rawSentences,
-    shuffledIndices,
     sentences,
     totalSentences,
     isLessonAlreadyCompleted,
@@ -650,11 +628,9 @@ const SentenceList = () => {
         </div>
       </header>
 
-      {/* Responsive Container: Mobile (Vertical Stack), Laptop/Desktop lg+ (Left Image, Right Content Side-by-Side) */}
       <main className="flex-1 flex flex-col lg:flex-row items-center justify-center p-2 sm:p-4 overflow-hidden w-full max-w-6xl mx-auto gap-3 lg:gap-6 bg-[#0b0e1b]">
         {current ? (
           <>
-            {/* Left Column: Image Container (Full width on mobile/tablet, flex-1 on laptop) */}
             <div className="w-full lg:w-3/5 h-auto lg:h-full max-h-[50vh] lg:max-h-[75vh] flex items-center justify-center bg-[#121629]/50 rounded-2xl p-2 border border-indigo-900/40 shrink-0 overflow-hidden shadow-xl">
               <div className="relative w-full h-full aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center">
                 {current.imageUrl ? (
@@ -672,7 +648,6 @@ const SentenceList = () => {
               </div>
             </div>
 
-            {/* Right Column: Sentence, Audio & Controls */}
             <div className="w-full lg:w-2/5 flex flex-col justify-center gap-2 lg:gap-3 min-h-0">
               <div className="hidden lg:flex justify-start shrink-0">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-indigo-950/80 via-purple-950/80 to-indigo-950/80 border border-indigo-500/40">
@@ -774,9 +749,7 @@ const SentenceList = () => {
                   className="flex-1 flex items-center justify-center py-2.5 bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-[0_0_15px_rgba(20,184,166,0.3)] disabled:opacity-50 cursor-pointer"
                 >
                   <span>
-                    {!isAtBackendCurrent && backendCurrentSceneId
-                      ? 'Continue ➔'
-                      : actionStatus === 'loading' && isLast
+                    {actionStatus === 'loading' && isLast
                       ? 'Completing...'
                       : isLast
                       ? '🎉 Finish >'
