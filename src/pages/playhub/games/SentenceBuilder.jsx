@@ -486,7 +486,7 @@ const SentenceBuilder = () => {
       )}
 
       {view === 'game' && (
-        <div className="flex-1 min-h-0 flex flex-col max-w-7xl w-full mx-auto px-2.5 sm:px-4 py-1 sm:py-3 overflow-hidden justify-between bg-[#0b0e1b]">
+        <div className="flex-1 min-h-0 flex flex-col max-w-7xl w-full mx-auto px-2.5 sm:px-4 py-1 sm:py-3 overflow-hidden bg-[#0b0e1b]">
           <div className="flex items-center justify-between gap-2 mb-1 sm:mb-3 shrink-0">
             <button
               onClick={handleBackToPicker}
@@ -574,9 +574,12 @@ const SentenceBuilder = () => {
               </div>
             </motion.div>
           ) : currentSentence ? (
-            <div className="flex-1 min-h-0 flex flex-col justify-between items-center gap-1.5 lg:max-w-3xl lg:mx-auto bg-[#0b0e1b]">
-              <div className="w-full aspect-video max-h-[38vh] flex items-center justify-center bg-[#121629]/50 rounded-2xl p-1 border border-indigo-900/40 shrink-0 overflow-hidden shadow-lg">
-                <div className="relative w-full h-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
+            /* ── Two-column game layout matching SentenceList style ── */
+            <main className="flex-1 min-h-0 flex flex-col lg:flex-row items-center justify-center p-2 sm:p-4 overflow-hidden w-full max-w-6xl mx-auto gap-3 lg:gap-6 bg-[#0b0e1b]">
+
+              {/* LEFT: Scene image */}
+              <div className="w-full lg:w-3/5 h-auto lg:h-full max-h-[42vh] lg:max-h-[75vh] flex items-center justify-center bg-[#121629]/50 rounded-2xl p-2 border border-indigo-900/40 shrink-0 overflow-hidden shadow-xl">
+                <div className="relative w-full h-full aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center">
                   {currentSentence.imageUrl ? (
                     <img
                       src={currentSentence.imageUrl}
@@ -589,26 +592,49 @@ const SentenceBuilder = () => {
                       <span className="text-xs mt-1">Scene Illustration</span>
                     </div>
                   )}
-
-                  {currentSentence.audioUrl && (
-                    <button
-                      onClick={() => playAudio()}
-                      className={`absolute bottom-2 right-2 px-3 py-1.5 rounded-xl backdrop-blur-md border font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-lg ${
-                        isPlayingAudio
-                          ? 'bg-teal-500 text-slate-950 border-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.6)]'
-                          : 'bg-black/60 text-teal-300 border-teal-500/40 hover:bg-black/80'
-                      }`}
-                    >
-                      <Volume2 className={`w-3.5 h-3.5 ${isPlayingAudio ? 'animate-pulse' : ''}`} />
-                      <span>{isPlayingAudio ? 'Playing...' : 'Listen Hint'}</span>
-                    </button>
-                  )}
                 </div>
               </div>
 
-              <div className="w-full flex-1 min-h-0 flex flex-col justify-between gap-1.5 sm:gap-2.5 bg-[#0b0e1b]">
+              {/* RIGHT: Controls panel */}
+              <div className="w-full lg:w-2/5 flex flex-col justify-center gap-2 lg:gap-3 min-h-0">
+
+                {/* Listen / audio button */}
+                {currentSentence.audioUrl && (
+                  <div className="flex items-center justify-center gap-2 shrink-0">
+                    <div className="flex items-center gap-0.5 opacity-60 scale-75">
+                      {[3, 6, 10, 6, 12, 16, 9, 4, 13, 7, 3].map((h, i) => (
+                        <div
+                          key={`w1-${i}`}
+                          className="w-0.5 bg-indigo-400 rounded-full transition-all duration-300"
+                          style={{ height: `${isPlayingAudio ? Math.max(3, h * 1.3) : h}px` }}
+                        />
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => playAudio()}
+                      className="relative group w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-teal-500 via-emerald-400 to-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      title="Listen Hint"
+                    >
+                      <div className="absolute inset-0 rounded-full border border-white/40 animate-pulse pointer-events-none" />
+                      <Volume2 className={`w-5 h-5 text-slate-950 ${isPlayingAudio ? 'animate-pulse' : ''}`} />
+                    </button>
+
+                    <div className="flex items-center gap-0.5 opacity-60 scale-75">
+                      {[7, 13, 4, 9, 16, 12, 6, 10, 6, 3, 9].map((h, i) => (
+                        <div
+                          key={`w2-${i}`}
+                          className="w-0.5 bg-purple-400 rounded-full transition-all duration-300"
+                          style={{ height: `${isPlayingAudio ? Math.max(3, h * 1.3) : h}px` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Answer drop zone */}
                 <div
-                  className={`w-full min-h-[45px] sm:min-h-[70px] p-2 sm:p-3 rounded-xl border-2 transition-all duration-300 flex flex-wrap items-center justify-center content-center gap-1.5 relative shadow-inner ${
+                  className={`w-full min-h-[52px] sm:min-h-[72px] p-2.5 sm:p-3 rounded-xl border-2 transition-all duration-300 flex flex-wrap items-center justify-center content-center gap-1.5 relative shadow-inner ${
                     validationState === 'correct'
                       ? 'bg-emerald-950/30 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
                       : validationState === 'incorrect'
@@ -639,16 +665,17 @@ const SentenceBuilder = () => {
                   )}
                 </div>
 
+                {/* Validation feedback */}
                 <AnimatePresence>
                   {validationState === 'correct' && (
                     <motion.div
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="p-1.5 sm:p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5 shadow-md"
+                      className="p-1.5 sm:p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5 shadow-md shrink-0"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>🎉 Perfect! Playing audio & moving next...</span>
+                      <span>🎉 Perfect! Playing audio &amp; moving next...</span>
                     </motion.div>
                   )}
                   {validationState === 'incorrect' && (
@@ -656,7 +683,7 @@ const SentenceBuilder = () => {
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="p-1.5 sm:p-2 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md"
+                      className="p-1.5 sm:p-2 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shrink-0"
                     >
                       <AlertCircle className="w-3.5 h-3.5 text-red-400" />
                       <span>Not quite right. Tap words to remove or listen to hint.</span>
@@ -664,7 +691,8 @@ const SentenceBuilder = () => {
                   )}
                 </AnimatePresence>
 
-                <div className="p-2 sm:p-3 rounded-xl bg-[#0e1224] border border-indigo-950/80 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 min-h-[65px] sm:min-h-[90px]">
+                {/* Word bank */}
+                <div className="p-2.5 sm:p-3 rounded-xl bg-[#0e1224] border border-indigo-950/80 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 min-h-[65px] sm:min-h-[88px] shrink-0">
                   {wordBank.map((wordObj) => (
                     <motion.button
                       key={wordObj.id}
@@ -679,11 +707,12 @@ const SentenceBuilder = () => {
                   ))}
                 </div>
 
-                <div className="flex items-center gap-2 pt-0.5">
+                {/* Action buttons: Reset + Check/Next */}
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={handleResetWords}
                     disabled={placedWords.length === 0 || validationState === 'correct' || isAutoAdvancing}
-                    className="px-3 py-2 sm:py-3 rounded-xl bg-[#121629] border border-indigo-900/60 text-slate-300 hover:text-white hover:bg-[#1a213b] text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    className="px-3 py-2.5 rounded-xl bg-[#121629] border border-indigo-900/60 text-slate-300 hover:text-white hover:bg-[#1a213b] text-xs font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
                   >
                     <RotateCcw className="w-4 h-4" />
                     <span>Reset</span>
@@ -692,7 +721,7 @@ const SentenceBuilder = () => {
                   {validationState === 'correct' ? (
                     <button
                       disabled
-                      className="flex-1 py-2 sm:py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 transition-all opacity-90 cursor-wait"
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-xs shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 opacity-90 cursor-wait"
                     >
                       <span>Playing Audio... 🎧</span>
                     </button>
@@ -700,7 +729,7 @@ const SentenceBuilder = () => {
                     <button
                       onClick={handleCheckAnswer}
                       disabled={placedWords.length === 0 || isAutoAdvancing}
-                      className="flex-1 py-2 sm:py-3 px-4 rounded-xl bg-gradient-to-r from-teal-400 via-cyan-400 to-indigo-400 text-slate-950 font-black text-xs sm:text-sm shadow-[0_0_15px_rgba(45,212,191,0.3)] flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black text-xs shadow-[0_0_15px_rgba(45,212,191,0.3)] flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
                     >
                       <Check className="w-4 h-4 stroke-[3]" />
                       <span>Check Answer</span>
@@ -708,7 +737,7 @@ const SentenceBuilder = () => {
                   )}
                 </div>
               </div>
-            </div>
+            </main>
           ) : (
             <div className="p-8 rounded-2xl bg-[#121629] border border-indigo-950 text-center my-auto">
               <p className="text-slate-300 font-bold">No sentences found in this lesson.</p>
