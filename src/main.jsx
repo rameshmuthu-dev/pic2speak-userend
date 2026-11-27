@@ -12,6 +12,18 @@ import { store } from '../src/redux/Store.js';
 import { loadMapSnapshot } from './utils/mapCache.js';
 import { hydrateMapFromCache } from './redux/slices/adventureMapSlice.js';
 
+// Recover gracefully if a dynamic chunk fails to load after a new deployment
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', (event) => {
+    const reloadKey = 'pic2speak_chunk_reload';
+    if (!sessionStorage.getItem(reloadKey)) {
+      sessionStorage.setItem(reloadKey, '1');
+      event.preventDefault();
+      window.location.reload();
+    }
+  });
+}
+
 // Pre-hydrate published map snapshot from IndexedDB before initial render
 loadMapSnapshot().then((snapshot) => {
   if (snapshot?.data) {
